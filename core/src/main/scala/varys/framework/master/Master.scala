@@ -1,9 +1,6 @@
 package varys.framework.master
 
 import akka.actor._
-import akka.remote.{RemoteClientLifeCycleEvent, RemoteClientDisconnected, RemoteClientShutdown}
-import akka.util.duration._
-import akka.dispatch._
 import akka.routing._
 
 import java.text.SimpleDateFormat
@@ -19,6 +16,7 @@ import varys.framework.master.scheduler._
 import varys.framework.master.ui.MasterWebUI
 import varys.{Logging, Utils, VarysException}
 import varys.util.{AkkaUtils, SlaveToBpsMap}
+import akka.remote.{DisassociatedEvent, RemotingLifecycleEvent}
 
 private[varys] class Master(
     systemName:String, 
@@ -90,7 +88,7 @@ private[varys] class Master(
     override def preStart() {
       logInfo("Starting Varys master at varys://" + ip + ":" + port)
       // Listen for remote client disconnection events, since they don't go through Akka's watch()
-      context.system.eventStream.subscribe(self, classOf[RemoteClientLifeCycleEvent])
+      context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
       if (!webUiStarted.getAndSet(true)) {
         webUi.start()
       }
@@ -201,23 +199,23 @@ private[varys] class Master(
           removeClient(actorToClient.get(actor))
       }
 
-      case RemoteClientDisconnected(transport, address) => {
+      case e: DisassociatedEvent => {
         // The disconnected actor could've been a slave or a client; remove accordingly. 
         // Coflow termination is handled explicitly through UnregisterCoflow or when its client dies
-        if (addressToSlave.containsKey(address))
-          removeSlave(addressToSlave.get(address))
-        if (addressToClient.containsKey(address))  
-          removeClient(addressToClient.get(address))
+        if (addressToSlave.containsKey(e.remoteAddress))
+          removeSlave(addressToSlave.get(e.remoteAddress))
+        if (addressToClient.containsKey(e.remoteAddress))
+          removeClient(addressToClient.get(e.remoteAddress))
       }
 
-      case RemoteClientShutdown(transport, address) => {
-        // The disconnected actor could've been a slave or a client; remove accordingly. 
-        // Coflow termination is handled explicitly through UnregisterCoflow or when its client dies
-        if (addressToSlave.containsKey(address))
-          removeSlave(addressToSlave.get(address))
-        if (addressToClient.containsKey(address))  
-          removeClient(addressToClient.get(address))
-      }
+//      case RemoteClientShutdown(transport, address) => {
+//        // The disconnected actor could've been a slave or a client; remove accordingly.
+//        // Coflow termination is handled explicitly through UnregisterCoflow or when its client dies
+//        if (addressToSlave.containsKey(address))
+//          removeSlave(addressToSlave.get(address))
+//        if (addressToClient.containsKey(address))
+//          removeClient(addressToClient.get(address))
+//      }
 
       case RequestMasterState => {
         sender ! MasterState(
