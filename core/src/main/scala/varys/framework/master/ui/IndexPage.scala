@@ -17,9 +17,8 @@
 
 package varys.framework.master.ui
 
-import akka.dispatch.Await
 import akka.pattern.ask
-import akka.util.duration._
+import scala.concurrent.duration._
 
 import javax.servlet.http.HttpServletRequest
 
@@ -33,6 +32,7 @@ import varys.framework.JsonProtocol
 import varys.framework.master.{CoflowInfo, SlaveInfo, ClientInfo}
 import varys.ui.UIUtils
 import varys.Utils
+import scala.concurrent.Await
 
 private[varys] class IndexPage(parent: MasterWebUI) {
   val master = parent.masterActorRef

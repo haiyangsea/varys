@@ -17,20 +17,19 @@
 
 package varys.framework.slave.ui
 
-import akka.dispatch.Await
 import akka.pattern.ask
-import akka.util.duration._
 
 import javax.servlet.http.HttpServletRequest
 
 import net.liftweb.json.JsonAST.JValue
 
 import scala.xml.Node
+import scala.concurrent.duration._
 
 import varys.framework.JsonProtocol
 import varys.framework.{RequestSlaveState, SlaveState}
 import varys.ui.UIUtils
-import varys.Utils
+import scala.concurrent.Await
 
 private[varys] class IndexPage(parent: SlaveWebUI) {
   val slaveActor = parent.slave.self

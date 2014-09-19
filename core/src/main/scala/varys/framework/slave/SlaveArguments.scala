@@ -11,7 +11,7 @@ import varys.Utils
 private[varys] class SlaveArguments(
     args: Array[String]) {
   
-  var ip = Utils.localHostName()
+  var ip = Utils.localIpAddress
   var port = 0
   var webUiPort = 16017
   var commPort = 1607

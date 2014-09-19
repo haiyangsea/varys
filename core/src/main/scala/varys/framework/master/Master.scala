@@ -17,6 +17,7 @@ import varys.framework.master.ui.MasterWebUI
 import varys.{Logging, Utils, VarysException}
 import varys.util.{AkkaUtils, SlaveToBpsMap}
 import akka.remote.{DisassociatedEvent, RemotingLifecycleEvent}
+import scala.concurrent.{Future, ExecutionContext}
 
 private[varys] class Master(
     systemName:String, 
@@ -52,7 +53,7 @@ private[varys] class Master(
   val webUiStarted = new AtomicBoolean(false)
 
   // ExecutionContext for Futures
-  implicit val futureExecContext = ExecutionContext.fromExecutor(Utils.newDaemonCachedThreadPool())
+  implicit var futureExecContext = ExecutionContext.fromExecutor(Utils.newDaemonCachedThreadPool())
 
   private def now() = System.currentTimeMillis
   
@@ -65,11 +66,12 @@ private[varys] class Master(
 
   def start(): (ActorSystem, Int) = {
     val (actorSystem, boundPort) = AkkaUtils.createActorSystem(systemName, host, port)
-    val actor = actorSystem.actorOf(
+    actorSystem.actorOf(
       Props(new MasterActor(host, boundPort, webUiPort)).withRouter(
         RoundRobinRouter(nrOfInstances = NUM_MASTER_INSTANCES)), 
       name = actorName)
     (actorSystem, boundPort)
+
   }
   
   private[varys] class MasterActor(
@@ -174,7 +176,7 @@ private[varys] class Master(
 
       case UnregisterCoflow(coflowId) => {
         removeCoflow(idToCoflow.get(coflowId))
-        sender ! true
+        sender ! Success
       }
 
       case Heartbeat(slaveId, newRxBps, newTxBps) => {
@@ -250,14 +252,17 @@ private[varys] class Master(
 
         // coflowId will always be valid
         val coflow = idToCoflow.get(coflowId)
-        assert(coflow != null)
+        if(coflow == null) {
+          currentSender ! Failure(s"coflow[id = ${coflowId} dose not exist")
+        }
+        else {
+          val st = now
+          flowDescs.foreach { coflow.addFlow }
+          logDebug("Added " + flowDescs.size + " flows to " + coflow + " in " + (now - st) +
+            " milliseconds")
 
-        val st = now
-        flowDescs.foreach { coflow.addFlow }
-        logDebug("Added " + flowDescs.size + " flows to " + coflow + " in " + (now - st) + 
-          " milliseconds")
-        
-        currentSender ! true
+          currentSender ! Success
+        }
       }
 
       case AddFlow(flowDesc) => {
@@ -265,13 +270,16 @@ private[varys] class Master(
 
         // coflowId will always be valid
         val coflow = idToCoflow.get(flowDesc.coflowId)
-        assert(coflow != null)
+        if(coflow == null) {
+          currentSender ! Failure(s"coflow[id = ${flowDesc.coflowId} dose not exist")
+        }
+        else {
+          val st = now
+          coflow.addFlow(flowDesc)
+          logDebug("Added flow to " + coflow + " in " + (now - st) + " milliseconds")
 
-        val st = now
-        coflow.addFlow(flowDesc)
-        logDebug("Added flow to " + coflow + " in " + (now - st) + " milliseconds")
-        
-        currentSender ! true
+          currentSender ! Success
+        }
       }
 
       case GetFlow(flowId, coflowId, clientId, slaveId, _) => {
@@ -326,8 +334,10 @@ private[varys] class Master(
       assert(client != null)
 
       val coflow = idToCoflow.get(coflowId)
-      assert(coflow != null)
-      // assert(coflow.contains(flowId))
+      if(coflowId == null) {
+        handleNullCoflow(coflowId, clientId, actor)
+        return
+      }
 
       var canSchedule = false
       coflow.getFlowInfos(flowIds) match {
@@ -355,6 +365,11 @@ private[varys] class Master(
       }
     }
 
+    private def handleNullCoflow(coflowId: String, clientId: String, actor: ActorRef) {
+      logWarning(s"trying to get coflow that dose not exist.[client id = $clientId,coflow id = $coflowId]")
+      actor ! None
+    }
+
     def handleGetFlow(
         flowId: String, 
         coflowId: String, 
@@ -368,8 +383,10 @@ private[varys] class Master(
       assert(client != null)
 
       val coflow = idToCoflow.get(coflowId)
-      assert(coflow != null)
-      // assert(coflow.contains(flowId))
+      if(coflow == null) {
+        handleNullCoflow(coflowId, clientId, actor)
+        return
+      }
 
       var canSchedule = false
       coflow.getFlowInfo(flowId) match {
@@ -583,10 +600,9 @@ private[varys] object Master {
   def toAkkaUrl(varysUrl: String): String = {
     varysUrl match {
       case varysUrlRegex(host, port) =>
-        "akka://%s@%s:%s/user/%s".format(systemName, host, port, actorName)
+        "akka.tcp://%s@%s:%s/user/%s".format(systemName, host, port, actorName)
       case _ =>
         throw new VarysException("Invalid master URL: " + varysUrl)
     }
   }
-
 }

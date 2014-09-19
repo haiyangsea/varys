@@ -18,7 +18,6 @@
 package varys.framework.master.ui
 
 import akka.actor._
-import akka.util.Duration
 
 import javax.servlet.http.HttpServletRequest
 
@@ -27,6 +26,7 @@ import org.eclipse.jetty.server.{Handler, Server}
 import varys.{Logging, Utils}
 import varys.ui.JettyUtils
 import varys.ui.JettyUtils._
+import scala.concurrent.duration.Duration
 
 /**
  * Web UI server for the standalone master.

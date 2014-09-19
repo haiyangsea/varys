@@ -85,6 +85,12 @@ private[varys] case class UnregisteredCoflow(
     coflowId: String) 
   extends FrameworkMessage
 
+private[varys] case object Success
+  extends FrameworkMessage
+
+private[varys] case class Failure(msg: String)
+  extends FrameworkMessage
+
 private[varys] case class RejectedCoflow(
     coflowId: String,
     message: String) 

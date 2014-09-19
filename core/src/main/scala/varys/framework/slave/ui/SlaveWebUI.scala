@@ -17,10 +17,9 @@
 
 package varys.framework.slave.ui
 
-import akka.actor.{ActorRef}
-import akka.util.{Duration, Timeout}
+import akka.util.{Timeout}
 
-import java.io.{FileInputStream, File}
+import java.io.{File}
 
 import javax.servlet.http.HttpServletRequest
 
@@ -31,6 +30,7 @@ import varys.{Logging, Utils}
 import varys.ui.JettyUtils
 import varys.ui.JettyUtils._
 import varys.ui.UIUtils
+import scala.concurrent.duration.Duration
 
 /**
  * Web UI server for the standalone slave.
