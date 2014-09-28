@@ -10,6 +10,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
 import varys.framework.{FlowDescription, CoflowDescription}
+import varys.Logging
 
 private[varys] class CoflowInfo(
     val startTime: Long,
@@ -17,7 +18,7 @@ private[varys] class CoflowInfo(
     val desc: CoflowDescription,
     val parentClient: ClientInfo,
     val submitDate: Date,
-    val actor: ActorRef) {
+    val actor: ActorRef) extends Logging {
   
   private var _prevState = CoflowState.WAITING
   def prevState = _prevState
@@ -54,6 +55,8 @@ private[varys] class CoflowInfo(
   def numFlowsToComplete = desc.maxFlows - numCompletedFlows.get
   
   def getFlows() = idToFlow.values.asScala.filter(_.isLive)
+
+  def flows = idToFlow.values.asScala
 
   def getFlowInfos(flowIds: Array[String]): Option[Array[FlowInfo]] = {
     val ret = flowIds.map(idToFlow.get(_))
@@ -117,7 +120,9 @@ private[varys] class CoflowInfo(
   }
 
   def addFlow(flowDesc: FlowDescription) {
-    assert(!idToFlow.containsKey(flowDesc.id))
+    if (idToFlow.containsKey(flowDesc.id)) {
+      logWarning(s"flow id[${flowDesc.id} already exist in coflow[id = $id,name=${desc.name}],replace it")
+    }
     idToFlow.put(flowDesc.id, new FlowInfo(flowDesc))
     bytesLeft_.getAndAdd(flowDesc.sizeInBytes)
   }
@@ -183,7 +188,10 @@ private[varys] class CoflowInfo(
     flow.decreaseBytes(bytesSinceLastUpdate)
     bytesLeft_.getAndAdd(-bytesSinceLastUpdate)
     if (isCompleted) {
-      assert(flow.bytesLeft == 0)
+      if(flow.bytesLeft != 0) {
+        logWarning(s"flow[id = $flowId] in coflow[id=$id,name=${desc.name}] " +
+          s"complete,but it has left bytes[${flow.bytesLeft}]")
+      }
       numCompletedFlows.getAndIncrement
       true
     }

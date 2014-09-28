@@ -47,8 +47,8 @@ private[varys] class IndexPage(parent: SlaveWebUI) {
     val slaveState = Await.result(stateFuture, 30 seconds)
 
     val content =
-        <div class="row-fluid"> <!-- Slave Details -->
-          <div class="span12">
+        <div class="row"> <!-- Slave Details -->
+          <div class="col-md-12">
             <ul class="unstyled">
               <li><strong>ID:</strong> {slaveState.slaveId}</li>
               <li><strong>

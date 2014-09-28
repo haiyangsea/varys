@@ -45,6 +45,7 @@ class MasterWebUI(masterActorRef_ : ActorRef, requestedPort: Int) extends Loggin
 
   val coflowPage = new CoflowPage(this)
   val indexPage = new IndexPage(this)
+  val clientPage = new ClientPage(this)
 
   def start() {
     try {
@@ -61,6 +62,7 @@ class MasterWebUI(masterActorRef_ : ActorRef, requestedPort: Int) extends Loggin
 
   val handlers = Array[(String, Handler)](
     ("/static", createStaticHandler(MasterWebUI.STATIC_RESOURCE_DIR)),
+    ("/client", (request: HttpServletRequest) => clientPage.render(request)),
     ("/coflow/json", (request: HttpServletRequest) => coflowPage.renderJson(request)),
     ("/coflow", (request: HttpServletRequest) => coflowPage.render(request)),
     ("/json", (request: HttpServletRequest) => indexPage.renderJson(request)),

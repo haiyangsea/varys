@@ -71,7 +71,7 @@ private[varys] object AkkaUtils {
       case Success =>
 
       case Failure(msg) =>
-        throw new VarysException(s"ask actor[$actor] for message + $message failure,cause $msg")
+        throw new VarysException(s"ask actor[$actor] for message[$message] failure,cause $msg")
 
       case _ =>
         throw new VarysException(s"ask actor[$actor] for message + $message failure")

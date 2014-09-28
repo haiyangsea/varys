@@ -57,16 +57,14 @@ private[varys] object UIUtils {
           </div>
         </div>
 
-        <div class="container-fluid">
-          <div class="row-fluid">
-            <div class="span12">
+          <div class="row">
+            <div class="col-md-12">
               <h3 style="vertical-align: bottom; display: inline-block;">
                 {title}
               </h3>
             </div>
           </div>
           {content}
-        </div>
       </body>
     </html>
   }
@@ -81,10 +79,9 @@ private[varys] object UIUtils {
         <script src={prependBaseUri("/static/sorttable.js")} ></script>
         <title>{title}</title>
       </head>
-      <body>
-        <div class="container-fluid">
-          <div class="row-fluid">
-            <div class="span12">
+      <body style="padding-left:20px;padding-right:20px">
+          <div class="row">
+            <div class="col-md-12">
               <h3 style="vertical-align: middle; display: inline-block;">
                 <img src={prependBaseUri("/static/varys-logo-77x50px-hd.png")} style="margin-right: 15px;" />
                 {title}
@@ -92,7 +89,6 @@ private[varys] object UIUtils {
             </div>
           </div>
           {content}
-        </div>
       </body>
     </html>
   }
@@ -106,7 +102,7 @@ private[varys] object UIUtils {
 
     val colWidth = 100.toDouble / headers.size
     val colWidthAttr = if (fixedWidth) colWidth + "%" else ""
-    var tableClass = "table table-bordered table-striped table-condensed sortable"
+    var tableClass = "table table-hover table-striped sortable"
     if (fixedWidth) {
       tableClass += " table-fixed"
     }

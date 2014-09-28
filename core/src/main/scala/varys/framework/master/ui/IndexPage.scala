@@ -53,6 +53,9 @@ private[varys] class IndexPage(parent: MasterWebUI) {
     val slaves = state.slaves.sortBy(_.id)
     val slaveTable = UIUtils.listingTable(slaveHeaders, slaveRow, slaves)
 
+    val clientHeaders = Seq("ID", "Name", "User", "Address", "Submit Date", "Duration")
+    val clientTable = UIUtils.listingTable(clientHeaders, clientRow, state.activeClients.toSeq)
+
     val coflowHeaders = Seq("ID", "Name", "Submitted Time", "User", "State", "Duration")
     val activeCoflows = state.activeCoflows.sortBy(_.startTime).reverse
     val activeCoflowsTable = UIUtils.listingTable(coflowHeaders, coflowRow, activeCoflows)
@@ -60,8 +63,8 @@ private[varys] class IndexPage(parent: MasterWebUI) {
     val completedCoflowsTable = UIUtils.listingTable(coflowHeaders, coflowRow, completedCoflows)
 
     val content =
-        <div class="row-fluid">
-          <div class="span12">
+        <div class="row">
+          <div class="col-md-12">
             <ul class="unstyled">
               <li><strong>URL:</strong> {state.uri}</li>
               <li><strong>Slaves:</strong> {state.slaves.size}</li>
@@ -72,22 +75,29 @@ private[varys] class IndexPage(parent: MasterWebUI) {
           </div>
         </div>
 
-        <div class="row-fluid">
-          <div class="span12">
+        <div class="row">
+          <div class="col-md-12">
             <h4> Slaves </h4>
             {slaveTable}
           </div>
         </div>
 
-        <div class="row-fluid">
-          <div class="span12">
+        <div class="row">
+          <div class="col-md-12">
+            <h4> Active Clients </h4>
+            {clientTable}
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-12">
             <h4> Running Coflows </h4>
             {activeCoflowsTable}
           </div>
         </div>
 
-        <div class="row-fluid">
-          <div class="span12">
+        <div class="row">
+          <div class="col-md-12">
             <h4> Completed Coflows </h4>
             {completedCoflowsTable}
           </div>
@@ -105,6 +115,18 @@ private[varys] class IndexPage(parent: MasterWebUI) {
     </tr>
   }
 
+  def clientRow(client: ClientInfo): Seq[Node] = {
+    <tr>
+      <td>
+        <a href={"client?clientId=" + client.id}>{client.id}</a>
+      </td>
+      <td>{client.name}</td>
+      <td>{client.user}</td>
+      <td>{client.host + ":" + client.commPort}</td>
+      <td>{FrameworkWebUI.formatDate(client.submitDate)}</td>
+      <td>{FrameworkWebUI.formatDuration(client.duration)}</td>
+    </tr>
+  }
 
   def coflowRow(coflow: CoflowInfo): Seq[Node] = {
     <tr>

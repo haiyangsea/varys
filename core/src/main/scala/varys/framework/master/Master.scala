@@ -253,7 +253,7 @@ private[varys] class Master(
         // coflowId will always be valid
         val coflow = idToCoflow.get(coflowId)
         if(coflow == null) {
-          currentSender ! Failure(s"coflow[id = ${coflowId} dose not exist")
+          currentSender ! Failure(s"coflow[id = ${coflowId}] dose not exist")
         }
         else {
           val st = now
@@ -271,7 +271,7 @@ private[varys] class Master(
         // coflowId will always be valid
         val coflow = idToCoflow.get(flowDesc.coflowId)
         if(coflow == null) {
-          currentSender ! Failure(s"coflow[id = ${flowDesc.coflowId} dose not exist")
+          currentSender ! Failure(s"coflow[id = ${flowDesc.coflowId}] dose not exist")
         }
         else {
           val st = now
@@ -301,13 +301,15 @@ private[varys] class Master(
       case FlowProgress(flowId, coflowId, bytesSinceLastUpdate, isCompleted) => {
         // coflowId will always be valid
         val coflow = idToCoflow.get(coflowId)
-        assert(coflow != null)
+        if (coflow == null) {
+          logError(s"coflow[id = $coflowId] dose not exist in master!flow id is $flowId")
+        } else {
+          val st = now
+          coflow.updateFlow(flowId, bytesSinceLastUpdate, isCompleted)
 
-        val st = now
-        coflow.updateFlow(flowId, bytesSinceLastUpdate, isCompleted)
-        
-        logTrace("Received FlowProgress for flow " + flowId + " of " + coflow + " in " + 
-          (now - st) + " milliseconds")
+          logTrace("Received FlowProgress for flow " + flowId + " of " + coflow + " in " +
+            (now - st) + " milliseconds")
+        }
       }
 
       case DeleteFlow(flowId, coflowId) => {
@@ -331,7 +333,10 @@ private[varys] class Master(
       logTrace("handleGetFlows(" + flowIds + ", " + coflowId + ", " + slaveId + ", " + actor + ")")
 
       val client = idToClient.get(clientId)
-      assert(client != null)
+      if (client == null) {
+        actor ! Failure(s"client[id = $clientId] dose not exist in master!")
+        return
+      }
 
       val coflow = idToCoflow.get(coflowId)
       if(coflowId == null) {
@@ -380,7 +385,10 @@ private[varys] class Master(
       logTrace("handleGetFlow(" + flowId + ", " + coflowId + ", " + slaveId + ", " + actor + ")")
 
       val client = idToClient.get(clientId)
-      assert(client != null)
+      if (client == null) {
+        actor ! Failure(s"client[id = $clientId] dose not exist in master!")
+        return
+      }
 
       val coflow = idToCoflow.get(coflowId)
       if(coflow == null) {
@@ -446,7 +454,7 @@ private[varys] class Master(
 
     def addClient(clientName: String, host: String, commPort: Int, actor: ActorRef): ClientInfo = {
       val date = new Date(now)
-      val client = new ClientInfo(now, newClientId(date), host, commPort, date, actor)
+      val client = new ClientInfo(clientName, now, newClientId(date), host, commPort, date, actor)
       idToClient.put(client.id, client)
       actorToClient(actor) = client
       addressToClient(actor.path.address) = client

@@ -7,6 +7,7 @@ import java.util.Date
 import scala.collection.mutable.{HashSet}
 
 private[varys] class ClientInfo(
+    val name: String,
     val startTime: Long,
     val id: String, 
     val host: String, 

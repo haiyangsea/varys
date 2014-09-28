@@ -22,7 +22,15 @@ private[varys] class FlowInfo(
   }
 
   def isLive = (destClient != null && bytesLeft > 0)
-  
+
+  def state = if(destClient == null) {
+    FlowState.FRESH
+  } else if(destClient != null && bytesLeft > 0) {
+    FlowState.ACTIVE
+  } else {
+    FlowState.FINISH
+  }
+
   def getFlowSize() = desc.sizeInBytes
   def decreaseBytes(byteToDecrease: Long) { 
     bytesLeft_.getAndAdd(-byteToDecrease) 
