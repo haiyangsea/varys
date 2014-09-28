@@ -65,9 +65,9 @@ object VarysBuild extends Build {
       "io.netty" % "netty-all" % "4.0.23.Final",
       "org.fusesource" % "sigar" % sigarVersion classifier "" classifier "native",
       "com.esotericsoftware.kryo" % "kryo" % "2.19",
-      "javax.servlet" % "javax.servlet-api" % "3.0.1",
+      "javax.servlet" % "javax.servlet-api" % "3.0.1"
       // akka-kryo-serialization has been added in an hackish way. We've compiled locally, then uploaded the jar to my website.
-      "akka-kryo-serialization" % "akka-kryo-serialization" % "0.2-SNAPSHOT" from "http://mosharaf.com/akka-kryo-serialization-0.2-SNAPSHOT.jar"
+//      "akka-kryo-serialization" % "akka-kryo-serialization" % "0.2-SNAPSHOT" from "http://mosharaf.com/akka-kryo-serialization-0.2-SNAPSHOT.jar"
     ),
     
     // Collect jar files to be extracted from managed jar dependencies
