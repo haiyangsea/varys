@@ -77,29 +77,49 @@ private[varys] class IndexPage(parent: MasterWebUI) {
 
         <div class="row">
           <div class="col-md-12">
-            <h4> Slaves </h4>
-            {slaveTable}
+            <nav class="navbar navbar-inverse" role="navigation">
+              <div class="container-fluid">
+                <div class="collapse navbar-collapse">
+                  <ul class="nav navbar-nav" role="tablist" id="nav-tab">
+                    <li class="active"><a href="#slaves" role="tab" data-toggle="tab">Slaves</a></li>
+                    <li><a href="#clients" role="tab" data-toggle="tab">Active Clients</a></li>
+                    <li><a href="#running-coflows" role="tab" data-toggle="tab">Running Coflows</a></li>
+                    <li><a href="#completed-coflows" role="tab" data-toggle="tab">Completed Coflows</a></li>
+                  </ul>
+                </div>
+              </div>
+            </nav>
           </div>
         </div>
 
-        <div class="row">
-          <div class="col-md-12">
-            <h4> Active Clients </h4>
-            {clientTable}
+        <div class="tab-content">
+          <div class="tab-pane active" id="slaves">
+            <div class="row">
+              <div class="col-md-12">
+                {slaveTable}
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div class="row">
-          <div class="col-md-12">
-            <h4> Running Coflows </h4>
-            {activeCoflowsTable}
+          <div class="tab-pane" id="clients">
+            <div class="row">
+              <div class="col-md-12">
+                {clientTable}
+              </div>
+            </div>
           </div>
-        </div>
-
-        <div class="row">
-          <div class="col-md-12">
-            <h4> Completed Coflows </h4>
-            {completedCoflowsTable}
+          <div class="tab-pane" id="running-coflows">
+            <div class="row">
+              <div class="col-md-12">
+                {activeCoflowsTable}
+              </div>
+            </div>
+          </div>
+          <div class="tab-pane" id="completed-coflows">
+            <div class="row">
+              <div class="col-md-12">
+                {completedCoflowsTable}
+              </div>
+            </div>
           </div>
         </div>;
     UIUtils.basicVarysPage(content, "Varys Master at " + state.uri)
@@ -108,7 +128,7 @@ private[varys] class IndexPage(parent: MasterWebUI) {
   def slaveRow(slave: SlaveInfo): Seq[Node] = {
     <tr>
       <td>
-        <a href={slave.webUiAddress}>{slave.id}</a>
+        <a href={slave.webUiAddress} target="_blank">{slave.id}</a>
       </td>
       <td>{slave.host}:{slave.port}</td>
       <td>{slave.state}</td>
@@ -118,7 +138,7 @@ private[varys] class IndexPage(parent: MasterWebUI) {
   def clientRow(client: ClientInfo): Seq[Node] = {
     <tr>
       <td>
-        <a href={"client?clientId=" + client.id}>{client.id}</a>
+        <a href={"client?clientId=" + client.id} target="_blank">{client.id}</a>
       </td>
       <td>{client.name}</td>
       <td>{client.user}</td>
@@ -131,7 +151,7 @@ private[varys] class IndexPage(parent: MasterWebUI) {
   def coflowRow(coflow: CoflowInfo): Seq[Node] = {
     <tr>
       <td>
-        <a href={"coflow?coflowId=" + coflow.id}>{coflow.id}</a>
+        <a href={"coflow?coflowId=" + coflow.id} target="_blank">{coflow.id}</a>
       </td>
       <td>{coflow.desc.name}</td>
       <td>{FrameworkWebUI.formatDate(coflow.submitDate)}</td>

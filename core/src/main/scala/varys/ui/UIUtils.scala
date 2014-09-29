@@ -75,7 +75,9 @@ private[varys] object UIUtils {
       <head>
         <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
         <link rel="stylesheet" href={prependBaseUri("/static/bootstrap.min.css")} type="text/css" />
-        <link rel="stylesheet" href={prependBaseUri("/static/webui.css")}  type="text/css" />
+        <!--<link rel="stylesheet" href={prependBaseUri("/static/webui.css")}  type="text/css" />-->
+        <script src={prependBaseUri("/static/jquery.min.js")}></script>
+        <script src={prependBaseUri("/static/bootstrap.min.js")}></script>
         <script src={prependBaseUri("/static/sorttable.js")} ></script>
         <title>{title}</title>
       </head>

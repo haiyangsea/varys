@@ -30,7 +30,7 @@ import varys.framework.{MasterState, RequestMasterState}
 import varys.framework.JsonProtocol
 import varys.ui.UIUtils
 import scala.concurrent.Await
-import varys.framework.master.FlowInfo
+import varys.framework.master.{HostThroughput, FlowInfo}
 import varys.Utils
 
 private[varys] class CoflowPage(parent: MasterWebUI) {
@@ -56,8 +56,11 @@ private[varys] class CoflowPage(parent: MasterWebUI) {
     val coflow = state.activeCoflows.find(_.id == coflowId).getOrElse({
       state.completedCoflows.find(_.id == coflowId).getOrElse(null)
     })
-    val flowsHeader = Seq("Flow ID", "Max Receivers", "Flow Size", "Client Host", "State")
+    val flowsHeader = Seq("Flow ID", "Max Receivers", "Flow Size", "From", "To", "State")
     val flowsTable = UIUtils.listingTable(flowsHeader, renderFlowRow, coflow.flows.toSeq)
+
+    val throughputHeader = Seq("Host", "Input", "Output")
+    val throughputTable = UIUtils.listingTable(throughputHeader, renderThroughputRow, coflow.hostThroughput.toSeq)
 
     val content =
         <div class="row">
@@ -69,10 +72,17 @@ private[varys] class CoflowPage(parent: MasterWebUI) {
               <li><strong>Submit Date:</strong> {coflow.submitDate}</li>
               <li><strong>State:</strong> {coflow.curState}</li>
               <li><strong>Coflow Type:</strong>{coflow.desc.coflowType.toString}</li>
-              <li><strong>Max Flows: </strong>{coflow.desc.maxFlows}</li>
+              <li><strong>Flows Length: </strong>{coflow.desc.maxFlows}</li>
+              <li><strong>Flows Size: </strong>{Utils.bytesToString(coflow.size)}</li>
               <li><strong>Number Of Flows To Regitster: </strong>{coflow.numFlowsToRegister}</li>
               <li><strong>Number Of Flows To Complete: </strong>{coflow.numFlowsToComplete}</li>
             </ul>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col-md-12">
+            <h3>Client Throughput</h3>
+            {throughputTable}
           </div>
         </div>
         <div class="row">
@@ -90,8 +100,17 @@ private[varys] class CoflowPage(parent: MasterWebUI) {
       <td>{flow.desc.id}</td>
       <td>{flow.desc.maxReceivers}</td>
       <td>{Utils.bytesToString(flow.getFlowSize())}</td>
+      <td>{flow.source}</td>
       <td>{if(flow.destClient == null) "Empty" else flow.destClient.host}</td>
       <td>{flow.state.toString}</td>
+    </tr>
+  }
+
+  def renderThroughputRow(throughput: HostThroughput) = {
+    <tr>
+      <td>{throughput.host}</td>
+      <td>{Utils.bytesToString(throughput.input)}</td>
+      <td>{Utils.bytesToString(throughput.output)}</td>
     </tr>
   }
 }

@@ -11,6 +11,7 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, Map}
 
 import varys.framework.{FlowDescription, CoflowDescription}
 import varys.Logging
+import scala.collection.mutable
 
 private[varys] class CoflowInfo(
     val startTime: Long,
@@ -57,6 +58,23 @@ private[varys] class CoflowInfo(
   def getFlows() = idToFlow.values.asScala.filter(_.isLive)
 
   def flows = idToFlow.values.asScala
+
+  def size: Long = flows.map(_.getFlowSize()).sum
+
+  // all host throughput, host name, input size, output size
+  def hostThroughput: Iterable[HostThroughput] = {
+    val throughput: mutable.HashMap[String, HostThroughput] =
+      new mutable.HashMap[String, HostThroughput]()
+    val allFlows = idToFlow.values().asScala
+    allFlows.foreach(flow => {
+      throughput.getOrElseUpdate(flow.source, new HostThroughput(flow.source)).output += flow.getFlowSize()
+      if(flow.destClient != null) {
+        throughput.getOrElseUpdate(flow.destClient.host,
+          new HostThroughput(flow.destClient.host)).input += flow.getFlowSize()
+      }
+    })
+    throughput.values
+  }
 
   def getFlowInfos(flowIds: Array[String]): Option[Array[FlowInfo]] = {
     val ret = flowIds.map(idToFlow.get(_))
@@ -231,4 +249,9 @@ private[varys] class CoflowInfo(
     ", numRegisteredFlows=" + numRegisteredFlows.get + ", numCompletedFlows=" + 
     numCompletedFlows.get + ", bytesLeft= " + bytesLeft + ", deadlineMillis= " + 
     desc.deadlineMillis + ")"
+}
+
+private[varys] class HostThroughput(val host: String) {
+  var input: Long = 0
+  var output: Long = 0
 }
