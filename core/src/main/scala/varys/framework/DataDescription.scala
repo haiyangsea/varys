@@ -32,16 +32,16 @@ private[varys] class FlowDescription(
 }
 
 private[varys] class FileDescription(
-    val id_ : String,  // Expected to be unique within the coflow
+    flowId : String,  // Expected to be unique within the coflow
     val pathToFile: String,
-    val cId_ : String,  // Must be a valid coflow
-    val dataType_ : DataType.DataType,
+    coflowId : String,  // Must be a valid coflow
+    dataType : DataType.DataType,
     val offset : Long,
-    val size_ : Long,
-    val maxR_ : Int,
-    val originHost_ : String,
-    val originCommPort_ : Int)
-  extends FlowDescription(id_, cId_, dataType_, size_, maxR_, originHost_, originCommPort_) {
+    val length : Long,
+    val maxR : Int,
+    originHost : String,
+    originCommPort : Int)
+  extends FlowDescription(flowId, coflowId, dataType, length, maxR, originHost, originCommPort) {
 
   override def toString: String = "FileDescription(" + id + "["+ pathToFile + "]:" + dataType + 
     ":" + coflowId + " # " + sizeInBytes + " Bytes)"

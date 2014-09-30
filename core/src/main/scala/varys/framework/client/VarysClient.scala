@@ -20,6 +20,7 @@ import varys.framework.master.{Master, CoflowInfo}
 import varys.framework.slave.Slave
 import varys.util._
 import scala.concurrent.{ExecutionContext, Await}
+import java.nio.channels.FileChannel.MapMode
 
 class VarysClient(
     clientName: String,
@@ -406,6 +407,12 @@ class VarysClient(
    */
   @throws(classOf[VarysException])
   private def getOne(flowDesc: FlowDescription): (FlowDescription, Array[Byte]) = {
+    // file in local file system,read it directly using nio instead of from net
+    if(flowDesc.dataType == DataType.ONDISK && flowDesc.originHost == this.clientHost) {
+      val data = Utils.readFileUseNIO(flowDesc.asInstanceOf[FileDescription])
+      return (flowDesc, data)
+    }
+
     var st = now
     val sock = new Socket(flowDesc.originHost, flowDesc.originCommPort)
     val oos = new ObjectOutputStream(new BufferedOutputStream(sock.getOutputStream))

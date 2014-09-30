@@ -16,6 +16,8 @@ import scala.Some
 
 import sun.nio.ch.DirectBuffer
 import scala.reflect.ClassTag
+import varys.framework.FileDescription
+import java.nio.channels.FileChannel.MapMode
 
 /**
  * Various utility methods used by Varys.
@@ -189,5 +191,16 @@ private object Utils extends Logging {
     stream.close()
     Source.fromBytes(buff).mkString
   }
-  
+
+  def readFileUseNIO(desc: FileDescription): Array[Byte] = {
+    val path = desc.pathToFile
+    val fileChannel = new RandomAccessFile(path, "r").getChannel
+    val buffer = ByteBuffer.allocate(desc.length.toInt)
+    try {
+      fileChannel.read(buffer, desc.offset)
+    } finally {
+      fileChannel.close()
+    }
+    buffer.array()
+  }
 }

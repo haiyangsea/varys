@@ -84,11 +84,7 @@ private[varys] class DataServer(
                         case DataType.ONDISK => {
                           // Read the specified amount of data from file into memory and send it
                           val fileDesc = req.flowDesc.asInstanceOf[FileDescription]
-                          val randFile = new RandomAccessFile(fileDesc.pathToFile, "r")
-                          randFile.seek(fileDesc.offset)
-                          val bArr = new Array[Byte](fileDesc.sizeInBytes.toInt)
-                          randFile.read(bArr, 0, fileDesc.sizeInBytes.toInt)
-                          randFile.close()
+                          val bArr = Utils.readFileUseNIO(fileDesc)
                           Some(bArr)
                         }
 
