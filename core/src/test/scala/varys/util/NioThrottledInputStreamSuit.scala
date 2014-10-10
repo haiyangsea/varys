@@ -25,10 +25,10 @@ class NioThrottledInputStreamSuit extends FunSuite with BeforeAndAfter{
     val channel = SocketChannel.open(new InetSocketAddress(dataServer.address, dataServer.port))
 
     // Don't wait for scheduling for 'SHORT' flows
-    val tisRate = if (flowDesc.sizeInBytes > size) 0.0 else 1024 * 1048576
+    val tisRate = if (flowDesc.sizeInBytes > 0) 0.0 else 1024 * 1048576
 
     val tis = new NioThrottledInputStream(channel, "client", tisRate)
-
+    println("rate is " + tisRate)
     val request = serializer.serialize(GetRequest(flowDesc))
     channel.write(request)
     println("sent request!")
