@@ -1,7 +1,11 @@
 package varys.framework.client
 
+import java.nio.ByteBuffer
+import java.nio.channels.SocketChannel
+
 import akka.actor._
 import akka.actor.Terminated
+import varys.framework.serializer.Serializer
 import scala.concurrent.duration._
 import akka.pattern.ask
 import akka.pattern.AskTimeoutException
@@ -22,6 +26,7 @@ import varys.util._
 import scala.concurrent.{ExecutionContext, Await}
 import java.nio.channels.FileChannel.MapMode
 
+// TODO 整合VarysClient和Slave中的数据存储
 class VarysClient(
     clientName: String,
     masterUrl: String,
@@ -51,18 +56,22 @@ class VarysClient(
 
   var regStartTime = 0L
 
-  val flowToTIS = new ConcurrentHashMap[DataIdentifier, ThrottledInputStream]()
+  val flowToTIS = new ConcurrentHashMap[DataIdentifier, NioThrottledInputStream]()
   // TODO: Currently using flowToBitPerSec inside synchronized blocks. Might consider replacing with
   // an appropriate data structure; e.g., Collections.synchronizedMap.
   val flowToBitPerSec = new ConcurrentHashMap[DataIdentifier, Double]()
   val flowToObject = new HashMap[DataIdentifier, Array[Byte]]
 
+  var clientHost = Utils.localIpAddress
+  var slaveHost: String = null
+
   val serverThreadName = "ServerThread for Client@" + Utils.localHostName()
-  var dataServer = new DataServer(0, serverThreadName, flowToObject)
+  var dataServer = new NioDataServer(clientHost, 0, serverThreadName, flowToObject)
   dataServer.start()
 
-  var clientHost = Utils.localIpAddress
-  var clientCommPort = dataServer.getCommPort
+  var clientPort = dataServer.port
+
+  val serializer: Serializer = Utils.getSerializer
 
   class ClientActor extends Actor with Logging {
     var masterAddress: Address = null
@@ -76,7 +85,7 @@ class VarysClient(
       try {
         masterActor = AkkaUtils.getActorRef(Master.toAkkaUrl(masterUrl), context)
         masterAddress = masterActor.path.address
-        masterActor ! RegisterClient(clientName, clientHost, clientCommPort)
+        masterActor ! RegisterClient(clientName, clientHost, clientPort)
         context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
       } catch {
         case e: Exception =>
@@ -106,6 +115,8 @@ class VarysClient(
         slaveId = slaveId_
         slaveUrl = slaveUrl_
         slaveActor = AkkaUtils.getActorRef(Slave.toAkkaUrl(slaveUrl), context)
+        slaveHost = Slave.getSlaveHost(slaveUrl)
+
         if (listener != null) {
           listener.connected(clientId)
         }
@@ -327,7 +338,7 @@ class VarysClient(
         size, 
         numReceivers, 
         clientHost, 
-        clientCommPort)
+        clientPort)
 
     val serialObj = Utils.serialize[T](obj)
     handlePut(desc, serialObj)
@@ -361,7 +372,7 @@ class VarysClient(
         size, 
         numReceivers, 
         clientHost, 
-        clientCommPort)
+        clientPort)
 
     handlePut(desc)
   }
@@ -378,7 +389,7 @@ class VarysClient(
         size, 
         numReceivers, 
         clientHost, 
-        clientCommPort)
+        clientPort)
 
     handlePut(desc)
   }
@@ -397,7 +408,7 @@ class VarysClient(
           blk._2, 
           blk._3, 
           clientHost, 
-          clientCommPort))
+          clientPort))
 
     handlePutMultiple(descs, coflowId, DataType.FAKE)
   }
@@ -408,29 +419,29 @@ class VarysClient(
   @throws(classOf[VarysException])
   private def getOne(flowDesc: FlowDescription): (FlowDescription, Array[Byte]) = {
     // file in local file system,read it directly using nio instead of from net
-    if(flowDesc.dataType == DataType.ONDISK && flowDesc.originHost == this.clientHost) {
-      val data = Utils.readFileUseNIO(flowDesc.asInstanceOf[FileDescription])
+    if(flowDesc.dataType == DataType.ONDISK && flowDesc.dataServerHost == this.slaveHost) {
+      val desc = flowDesc.asInstanceOf[FileDescription]
+      logInfo("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
+      val data = Utils.readFileUseNIO(desc)
       return (flowDesc, data)
     }
 
+    logDebug("Starting to fetch remote data at %s:%d".format(flowDesc.dataServerHost, flowDesc.dataServerPort))
     var st = now
-    val sock = new Socket(flowDesc.originHost, flowDesc.originCommPort)
-    val oos = new ObjectOutputStream(new BufferedOutputStream(sock.getOutputStream))
-    oos.flush
+    val channel = SocketChannel.open(new InetSocketAddress(flowDesc.dataServerHost, flowDesc.dataServerPort))
 
     // Don't wait for scheduling for 'SHORT' flows
     val tisRate = if (flowDesc.sizeInBytes > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
 
-    val tis = new ThrottledInputStream(sock.getInputStream, clientName, tisRate)
+    val tis = new NioThrottledInputStream(channel, clientName, tisRate)
     flowToTIS.put(flowDesc.dataId, tis)
-    // logTrace("Created socket and " + tis + " for " + flowDesc + " in " + (now - st) + 
-    //   " milliseconds")
-    
-    oos.writeObject(GetRequest(flowDesc))
-    oos.flush
+
+    val buffer = serializer.serialize(GetRequest(flowDesc))
+    logDebug("Serialized get request object,size is " + buffer.remaining())
+    channel.write(buffer)
     
     var retVal: Array[Byte] = null
-    
+
     st = now
     // Specially handle DataType.FAKE
     if (flowDesc.dataType == DataType.FAKE) {
@@ -447,31 +458,25 @@ class VarysClient(
         }
       }
     } else {
-      val ois = new ObjectInputStream(tis)
-      val resp = ois.readObject.asInstanceOf[Option[Array[Byte]]]
-      resp match {
-        case Some(byteArr) => {
-          logInfo("Received response of " + byteArr.length + " bytes")
+      val baos = new ByteArrayOutputStream()
+      val buffer = new Array[Byte](1024)
+      var length = tis.read(buffer)
+      while(length > 0) {
+        baos.write(buffer, 0, length)
+        length = tis.read(buffer)
+      }
+      retVal = baos.toByteArray
+      baos.close()
+      logInfo("Received remote[%s:%d] data response of size[%s] for flow[%s],expected size is %s"
+        .format(flowDesc.dataServerHost,
+          flowDesc.dataServerPort,
+          Utils.bytesToString(retVal.length),
+          flowDesc.dataId.dataId,
+          Utils.bytesToString(flowDesc.sizeInBytes)))
 
-          flowDesc.dataType match {
-            case DataType.ONDISK => {
-              retVal = byteArr
-            }
-
-            case DataType.INMEMORY => {
-              retVal = byteArr
-            }
-
-            case _ => {
-              logError("Invalid DataType!")
-              throw new VarysException("Invalid DataType!")
-            }
-          }
-        }
-        case None => {
-          logError("Nothing received!")
-          throw new VarysException("Invalid DataType!")
-        }
+      if(retVal.length != flowDesc.sizeInBytes) {
+        throw new VarysException("Data size dose not match,got data size %d,but expected %d"
+          .format(retVal.length, flowDesc.sizeInBytes))
       }
     }
     logTrace("Received " + flowDesc.sizeInBytes + " bytes for " + flowDesc + " in " + (now - st) + 
@@ -480,7 +485,7 @@ class VarysClient(
     // Close everything
     flowToTIS.remove(flowDesc.dataId)
     tis.close
-    sock.close
+    channel.close
     
     (flowDesc, retVal)
   }

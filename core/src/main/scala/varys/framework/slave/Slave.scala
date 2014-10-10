@@ -23,7 +23,6 @@ private[varys] class SlaveActor(
     ip: String,
     port: Int,
     webUiPort: Int,
-    commPort: Int,
     masterUrl: String,
     workDirPath: String = null)
   extends Actor with Logging {
@@ -31,7 +30,7 @@ private[varys] class SlaveActor(
   val HEARTBEAT_SEC = System.getProperty("varys.framework.heartbeat", "1").toInt
 
   val serverThreadName = "ServerThread for Slave@" + Utils.localHostName()
-  var dataServer: DataServer = null
+  val dataServer: NioDataServer = new NioDataServer(ip, 0, serverThreadName)
 
   // TODO: Keep track of local data
   val idsToFlow = new HashMap[(String, String), FlowDescription]
@@ -76,16 +75,16 @@ private[varys] class SlaveActor(
   }
 
   override def preStart() {
-    logInfo("Starting Varys slave %s:%d".format(ip, port))
     varysHome = new File(Option(System.getenv("VARYS_HOME")).getOrElse("."))
     logInfo("Varys home: " + varysHome)
     createWorkDir()
     webUi = new SlaveWebUI(this, workDir, Some(webUiPort))
-    dataServer = new DataServer(commPort, serverThreadName)
 
     webUi.start()
     dataServer.start()
     connectToMaster()
+
+    logInfo("Started Varys slave at %s:%d,data server port : %d".format(ip, port, dataServer.port))
   }
 
   override def postStop() {
@@ -97,7 +96,7 @@ private[varys] class SlaveActor(
     try {
       master = AkkaUtils.getActorRef(Master.toAkkaUrl(masterUrl), context)
       masterAddress = master.path.address
-      master ! RegisterSlave(slaveId, ip, port, webUi.boundPort.get, commPort, publicAddress)
+      master ! RegisterSlave(slaveId, ip, port, webUi.boundPort.get, dataServer.port, publicAddress)
       context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])
       context.watch(master) // Doesn't work with remote actors, but useful for testing
     } catch {
@@ -156,11 +155,12 @@ private[varys] class SlaveActor(
 
     case AddFlow(flowDesc) => {
       // TODO: Do something!
-      logInfo("Received AddFlow for " + flowDesc)
+      logDebug("Received AddFlow for " + flowDesc)
 
       // Update commPort if the end point will be a client
       if (flowDesc.dataType != DataType.INMEMORY) {
-        flowDesc.updateCommPort(commPort)
+        flowDesc.updateServerPort(dataServer.port)
+        flowDesc.updateServerHost(dataServer.address)
       }
 
       // Now let the master know and notify the client
@@ -170,11 +170,11 @@ private[varys] class SlaveActor(
 
     case AddFlows(flowDescs, coflowId, dataType) => {
       // TODO: Do something!
-      logInfo("Received AddFlows for coflow " + coflowId)
+      logDebug("Received AddFlows for coflow " + coflowId)
 
       // Update commPort if the end point will be a client
       if (dataType != DataType.INMEMORY) {
-        flowDescs.foreach(_.updateCommPort(commPort))
+        flowDescs.foreach(_.updateServerPort(port))
       }
 
       // Now let the master know and notify the client
@@ -184,14 +184,14 @@ private[varys] class SlaveActor(
 
     case GetFlow(flowId, coflowId, clientId, _, flowDesc) => {
       // TODO: Do something!
-      logInfo("Received GetFlow for " + flowDesc)
+      logDebug("Received GetFlow for " + flowDesc)
 
       sender ! Success
     }
 
     case GetFlows(flowIds, coflowId, clientId, _, flowDescs) => {
       // TODO: Do something!
-      logInfo("Received GetFlows for " + flowIds.size + " flows of coflow " + coflowId)
+      logDebug("Received GetFlows for " + flowIds.size + " flows of coflow " + coflowId)
 
       sender ! Success
     }
@@ -268,7 +268,7 @@ private[varys] object Slave {
 
   def main(argStrings: Array[String]) {
     val args = new SlaveArguments(argStrings)
-    val (actorSystem, _) = startSystemAndActor(args.ip, args.port, args.webUiPort, args.commPort,
+    val (actorSystem, _) = startSystemAndActor(args.ip, args.port, args.webUiPort,
       args.master, args.workDir)
     actorSystem.awaitTermination()
   }
@@ -285,16 +285,24 @@ private[varys] object Slave {
     }
   }
 
+  def getSlaveHost(slaveUrl: String): String = {
+    slaveUrl match {
+      case varysUrlRegex(host, port) =>
+        host
+      case _ =>
+        throw new VarysException("Invalid Slave URL: " + slaveUrl)
+    }
+  }
+
   def startSystemAndActor(
       host: String,
       port: Int,
       webUiPort: Int,
-      commPort: Int,
       masterUrl: String,
       workDir: String): (ActorSystem, Int) = {
 
     val (actorSystem, boundPort) = AkkaUtils.createActorSystem(systemName, host, port)
-    actorSystem.actorOf(Props(new SlaveActor(host, boundPort, webUiPort, commPort,
+    actorSystem.actorOf(Props(new SlaveActor(host, boundPort, webUiPort,
       masterUrl, workDir)), name = actorName)
     (actorSystem, boundPort)
   }

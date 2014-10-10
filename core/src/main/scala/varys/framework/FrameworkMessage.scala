@@ -12,7 +12,7 @@ private[varys] case class RegisterSlave(
     host: String,
     port: Int,
     webUiPort: Int,
-    commPort: Int,
+    dataServerPort: Int,
     publicAddress: String)
   extends FrameworkMessage
 
@@ -165,7 +165,7 @@ private[varys] case class GetRequest(
     targetCommPort: Int = 0) {
     
   // Not extending FrameworkMessage because it is NOT going through akka serialization
-  // override def toString: String = "GetRequest(" + flowDesc.id+ ":" + flowDesc.coflowId + ")"
+  override def toString: String = "GetRequest(" + flowDesc.id+ ":" + flowDesc.coflowId + ")"
 } 
 
 // Internal message in Master

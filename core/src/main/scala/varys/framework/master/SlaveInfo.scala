@@ -12,7 +12,7 @@ private[varys] class SlaveInfo(
   val port: Int,
   val actor: ActorRef,
   val webUiPort: Int,
-  val commPort: Int,
+  val dataServerPort: Int,
   val publicAddress: String) {
 
   var state: SlaveState.Value = SlaveState.ALIVE

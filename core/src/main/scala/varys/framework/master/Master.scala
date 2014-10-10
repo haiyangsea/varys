@@ -102,7 +102,7 @@ private[varys] class Master(
     }
 
     override def receive = {
-      case RegisterSlave(id, host, slavePort, slave_webUiPort, slave_commPort, publicAddress) => {
+      case RegisterSlave(id, host, slavePort, slave_webUiPort, dataServerPort, publicAddress) => {
         val currentSender = sender
         logInfo("Registering slave %s:%d".format(host, slavePort))
         if (idToSlave.containsKey(id)) {
@@ -113,7 +113,7 @@ private[varys] class Master(
             host, 
             slavePort, 
             slave_webUiPort, 
-            slave_commPort, 
+            dataServerPort, 
             publicAddress, 
             currentSender)
 
@@ -426,7 +426,7 @@ private[varys] class Master(
         host: String, 
         port: Int, 
         webUiPort: Int, 
-        commPort: Int,
+        dataServerPort: Int,
         publicAddress: String, 
         actor: ActorRef): SlaveInfo = {
       
@@ -435,7 +435,7 @@ private[varys] class Master(
       idToSlave.values.filter(
         w => (w.host == host) && (w.state == SlaveState.DEAD)).foreach(idToSlave.values.remove(_))
       
-      val slave = new SlaveInfo(id, host, port, actor, webUiPort, commPort, publicAddress)
+      val slave = new SlaveInfo(id, host, port, actor, webUiPort, dataServerPort, publicAddress)
       idToSlave.put(slave.id, slave)
       actorToSlave(actor) = slave
       addressToSlave(actor.path.address) = slave

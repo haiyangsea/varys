@@ -1,6 +1,6 @@
 package varys.framework
 
-private[varys] object DataType extends Enumeration("FAKE", "INMEMORY", "ONDISK") {
+private[varys] object DataType extends Enumeration {
   type DataType = Value
 
   val FAKE, INMEMORY, ONDISK = Value
@@ -16,8 +16,8 @@ private[varys] class FlowDescription(
     val dataType: DataType.DataType,  // http://www.scala-lang.org/node/7661
     val sizeInBytes: Long,
     val maxReceivers: Int,  // Upper-bound on the number of receivers (how long to keep it around?)
-    val originHost: String,
-    var originCommPort: Int)
+    var dataServerHost: String,
+    var dataServerPort: Int)
   extends Serializable {
 
   val dataId = DataIdentifier(id, coflowId)
@@ -26,8 +26,12 @@ private[varys] class FlowDescription(
   override def toString: String = "FlowDescription(" + id + ":" + dataType + ":" + coflowId + 
     " # " + sizeInBytes + " Bytes)"
   
-  def updateCommPort(commPort: Int) {
-    originCommPort = commPort
+  def updateServerPort(port: Int) {
+    dataServerPort = port
+  }
+  
+  def updateServerHost(host: String): Unit = {
+    dataServerHost = host
   }
 }
 
@@ -40,8 +44,8 @@ private[varys] class FileDescription(
     val length : Long,
     val maxR : Int,
     originHost : String,
-    originCommPort : Int)
-  extends FlowDescription(flowId, coflowId, dataType, length, maxR, originHost, originCommPort) {
+    originPort : Int)
+  extends FlowDescription(flowId, coflowId, dataType, length, maxR, originHost, originPort) {
 
   override def toString: String = "FileDescription(" + id + "["+ pathToFile + "]:" + dataType + 
     ":" + coflowId + " # " + sizeInBytes + " Bytes)"

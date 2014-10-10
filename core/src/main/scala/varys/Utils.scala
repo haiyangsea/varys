@@ -1,5 +1,7 @@
 package varys
 
+import java.nio.channels.SocketChannel
+
 import com.google.common.io.Files
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 
@@ -8,6 +10,8 @@ import java.net._
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.util.{Locale, Random, UUID}
 import java.util.concurrent.{Executors, ThreadFactory, ThreadPoolExecutor}
+
+import varys.framework.serializer.Serializer
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConversions._
@@ -202,5 +206,26 @@ private object Utils extends Logging {
       fileChannel.close()
     }
     buffer.array()
+  }
+
+  def getSerializer: Serializer = {
+    val serializerName: String = System.getProperty("varys.framework.serializer",
+      "varys.framework.serializer.JavaSerializer")
+    Class.forName(serializerName).newInstance().asInstanceOf[Serializer]
+  }
+
+  def readFromChannel(channel: SocketChannel): Array[Byte] = {
+    val data = new Array[Byte](1024)
+    val buffer = ByteBuffer.wrap(data)
+    var length = channel.read(buffer)
+    val byteStream = new ByteArrayOutputStream()
+    while(length > 0) {
+      byteStream.write(data, 0, length)
+      buffer.clear()
+      length = channel.read(buffer)
+    }
+    logDebug("read data from channel[%s],size is %d".format(channel.getRemoteAddress.toString,
+      byteStream.toByteArray.length))
+    byteStream.toByteArray
   }
 }
