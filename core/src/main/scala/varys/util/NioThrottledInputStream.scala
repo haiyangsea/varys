@@ -84,7 +84,7 @@ class NioThrottledInputStream(
   def setNewRate(newMaxBitPerSec: Double) {
     maxBytesPerSec = (newMaxBitPerSec / 8).toLong
     mBPSLock.synchronized {
-      logTrace(this + " newMaxBitPerSec = " + newMaxBitPerSec)
+      logDebug(this + "[newMaxBitPerSec = " + newMaxBitPerSec + "]")
       mBPSLock.notifyAll()
     }
   }
@@ -103,7 +103,7 @@ class NioThrottledInputStream(
   def getTotalSleepTime() = totalSleepTime
 
   override def toString(): String = {
-    "ThrottledInputStream{" +
+    "NioThrottledInputStream{" +
       "ownerName=" + ownerName +
       ", bytesRead=" + bytesRead +
       ", maxBytesPerSec=" + maxBytesPerSec +

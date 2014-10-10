@@ -26,7 +26,7 @@ import varys.util._
 import scala.concurrent.{ExecutionContext, Await}
 import java.nio.channels.FileChannel.MapMode
 
-// TODO 整合VarysClient和Slave中的数据存储
+// TODO 整合VarysClient和Slave中的数据存储,Short Flow Bytes
 class VarysClient(
     clientName: String,
     masterUrl: String,
@@ -458,23 +458,17 @@ class VarysClient(
         }
       }
     } else {
-      val baos = new ByteArrayOutputStream()
-      val buffer = new Array[Byte](1024)
-      var length = tis.read(buffer)
-      while(length > 0) {
-        baos.write(buffer, 0, length)
-        length = tis.read(buffer)
-      }
-      retVal = baos.toByteArray
-      baos.close()
-      logInfo("Received remote[%s:%d] data response of size[%s] for flow[%s],expected size is %s"
+      // 数据必须少量几次全部读出来，否则程序会卡死
+      val buffer = new Array[Byte](flowDesc.sizeInBytes.toInt)
+      val length = tis.read(buffer)
+      logInfo("Received remote[%s:%d] response,got data size[%s] for flow[%s],expected size is %s"
         .format(flowDesc.dataServerHost,
           flowDesc.dataServerPort,
-          Utils.bytesToString(retVal.length),
+          Utils.bytesToString(length),
           flowDesc.dataId.dataId,
           Utils.bytesToString(flowDesc.sizeInBytes)))
 
-      if(retVal.length != flowDesc.sizeInBytes) {
+      if(length != flowDesc.sizeInBytes) {
         throw new VarysException("Data size dose not match,got data size %d,but expected %d"
           .format(retVal.length, flowDesc.sizeInBytes))
       }
