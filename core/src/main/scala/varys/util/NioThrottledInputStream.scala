@@ -50,15 +50,14 @@ class NioThrottledInputStream(
     }
     readLen
   }
-
+  // TODO make it better
   override def read(b: Array[Byte], off: Int, len: Int): Int = {
     throttle()
-    val buffer = ByteBuffer.allocate(len)
+    val buffer = ByteBuffer.wrap(b, off, len)
     val readLen = channel.read(buffer)
     if (readLen > 0) {
       bytesRead += readLen
     }
-    buffer.get(b, off, len)
     readLen
   }
 

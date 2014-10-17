@@ -15,6 +15,6 @@ class LocalDataFetcher(
     val desc = flow.asInstanceOf[FileDescription]
     logDebug("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
     val data = Utils.readFileUseNIO(desc)
-    listener.onComplete(flow.id, flow.coflowId, data)
+    listener.complete(flow.id, flow.coflowId, data)
   }
 }

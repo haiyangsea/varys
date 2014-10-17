@@ -48,9 +48,9 @@ class RemoteDataFetcher(
             flow.id,
             Utils.bytesToString(flow.sizeInBytes),
             duration))
-        listener.onComplete(flow.id, flow.coflowId, data)
+        listener.complete(flow.id, flow.coflowId, data)
       } catch {
-        case e: Throwable => listener.onFailure(flow.id, flow.coflowId, flow.sizeInBytes, e)
+        case e: Throwable => listener.failure(flow.id, flow.coflowId, flow.sizeInBytes, e)
       } finally {
         client.flowToTIS.remove(flow.dataId)
         stream.close()

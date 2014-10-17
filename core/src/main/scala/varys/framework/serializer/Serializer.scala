@@ -12,3 +12,11 @@ trait Serializer {
 
   def deserialize[T: ClassTag](bytes: ByteBuffer): T
 }
+
+object Serializer {
+  def getSerializer: Serializer = {
+    val serializerName: String = System.getProperty("varys.framework.serializer",
+      "varys.framework.serializer.JavaSerializer")
+    Class.forName(serializerName).newInstance().asInstanceOf[Serializer]
+  }
+}

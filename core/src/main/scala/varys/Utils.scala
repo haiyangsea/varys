@@ -214,18 +214,24 @@ private object Utils extends Logging {
     Class.forName(serializerName).newInstance().asInstanceOf[Serializer]
   }
 
-  def readFromChannel(channel: SocketChannel): Array[Byte] = {
+  def readFromChannel(channel: SocketChannel): Option[Array[Byte]] = {
     val data = new Array[Byte](1024)
     val buffer = ByteBuffer.wrap(data)
     var length = channel.read(buffer)
-    val byteStream = new ByteArrayOutputStream()
-    while(length > 0) {
-      byteStream.write(data, 0, length)
-      buffer.clear()
-      length = channel.read(buffer)
+    // 远程Channel已经关闭
+    if(length == -1) {
+      None
+    } else {
+      val byteStream = new ByteArrayOutputStream()
+      while(length != 0) {
+        byteStream.write(data, 0, length)
+        buffer.clear()
+        length = channel.read(buffer)
+      }
+      logDebug("read data from channel[%s],size is %d".format(channel.getRemoteAddress.toString,
+        byteStream.toByteArray.length))
+      Some(byteStream.toByteArray)
     }
-    logDebug("read data from channel[%s],size is %d".format(channel.getRemoteAddress.toString,
-      byteStream.toByteArray.length))
-    byteStream.toByteArray
+
   }
 }
