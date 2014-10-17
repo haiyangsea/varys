@@ -650,21 +650,21 @@ class VarysClient(
   }
 
   private[this] class FlowListenerWrapper(listener: FetchFlowListener) extends FetchFlowListener {
-    override def onComplete(flowId: String, coflowId: String, data: Array[Byte]): Unit = {
+    override def complete(flowId: String, coflowId: String, data: Array[Byte]): Unit = {
       masterActor ! FlowProgress(
         flowId,
         coflowId,
         data.length,
         true)
-      listener.onComplete(flowId, coflowId, data)
+      listener.complete(flowId, coflowId, data)
     }
-    override def onFailure(flowId: String, coflowId: String, length: Long, e: Throwable): Unit = {
+    override def failure(flowId: String, coflowId: String, length: Long, e: Throwable): Unit = {
       masterActor ! FlowProgress(
         flowId,
         coflowId,
         length,
         false)
-      listener.onFailure(flowId, coflowId, length: Long, e)
+      listener.failure(flowId, coflowId, length: Long, e)
     }
   }
 
