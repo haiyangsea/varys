@@ -3,10 +3,10 @@ package varys.framework
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels._
-import java.util.concurrent.{LinkedBlockingDeque, TimeUnit, ThreadPoolExecutor}
+import java.util.concurrent.{LinkedBlockingDeque, ThreadPoolExecutor, TimeUnit}
 
 import varys.framework.serializer.Serializer
-import varys.{Utils, VarysException, Logging}
+import varys.{Logging, Utils, VarysException}
 
 import scala.collection.mutable.HashMap
 
@@ -20,7 +20,6 @@ class NioDataServer(
         flowObjectMap: HashMap[DataIdentifier, Array[Byte]] = null)
   extends Logging {
   val serializer: Serializer = Utils.getSerializer
-
   val selector: Selector = Selector.open()
 
   val serverChannel: ServerSocketChannel = ServerSocketChannel.open()
@@ -28,8 +27,8 @@ class NioDataServer(
   serverChannel.register(selector, SelectionKey.OP_ACCEPT)
 
   val SELECT_TIMEOUT = System.getProperty("varys.framework.select.timeout", "100").toInt
-  val threadMin = System.getProperty("varys.framework.server.threads.min", "1").toInt
-  val threadMax = System.getProperty("varys.framework.server.threads.min", "8").toInt
+  val threadMin = System.getProperty("varys.framework.server.threads.min", "4").toInt
+  val threadMax = System.getProperty("varys.framework.server.threads.min", "32").toInt
   val aliveTime = System.getProperty("varys.framework.server.alive", "60").toInt
 
   private val requestExecutor = new ThreadPoolExecutor(
@@ -77,8 +76,8 @@ class NioDataServer(
   def port: Int = serverChannel.socket.getLocalPort
 
   def run(): Unit ={
-    try {
-      while(!selectorThread.isInterrupted) {
+    while(!selectorThread.isInterrupted) {
+      try {
         val length = selector.select(SELECT_TIMEOUT)
         if(length > 0) {
           val keys = selector.selectedKeys().iterator()
@@ -88,61 +87,33 @@ class NioDataServer(
             if(key.isValid) {
               if(key.isAcceptable) {
                 val server = key.channel().asInstanceOf[ServerSocketChannel]
-                val channel = server.accept()
-                channel.configureBlocking(false)
-                channel.register(selector, SelectionKey.OP_READ)
-                logDebug("got client[%s] connection".format(channel.getRemoteAddress))
+                var channel = server.accept()
+                while(channel != null) {
+                  channel.configureBlocking(false)
+                  channel.register(selector, SelectionKey.OP_READ)
+                  logDebug("got client[%s] connection".format(channel.getRemoteAddress))
+                  channel = server.accept()
+                }
               } else if(key.isReadable) {
+                // 在多线程环境下，被放到线程中处理的key有可能会被多次处理，因此容易发生异常
+                // 将一个请求拆分为读和写两个过程，并没有一次读写的效率高！
                 key.interestOps(SelectionKey.OP_CONNECT)
-                requestExecutor.execute(new RequestHandler(key, doRead))
+                requestExecutor.submit(new Runnable {
+                  override def run(): Unit = doRead(key)
+                })
               } else if(key.isWritable) {
                 key.interestOps(SelectionKey.OP_CONNECT)
-                requestExecutor.execute(new RequestHandler(key, doWrite))
+                requestExecutor.submit(new Runnable {
+                  override def run(): Unit = doWrite(key)
+                })
               }
             }
           }
         }
       }
-    } catch {
-      case e: Exception => logError("Error in select loop", e)
-    }
-  }
-
-  def doRead(key: SelectionKey): Unit = {
-    val channel = key.channel().asInstanceOf[SocketChannel]
-    logDebug("starting to deal with data request from " + channel.getRemoteAddress.toString)
-    val data = Utils.readFromChannel(channel)
-    val request: GetRequest = serializer.deserialize[GetRequest](ByteBuffer.wrap(data))
-    channel.register(selector, SelectionKey.OP_WRITE, request)
-  }
-
-  def doWrite(key: SelectionKey): Unit ={
-    val channel = key.channel().asInstanceOf[SocketChannel]
-    try {
-      val request = key.attachment().asInstanceOf[GetRequest]
-      logDebug("starting send data for request[%s]".format(request.flowDesc.toString))
-      val dataType = request.flowDesc.dataType
-      // specially for fake data type
-      if(dataType == DataType.FAKE) {
-        handleFakeRequest(request, channel)
-      } else {
-        val message: Array[Byte] = if (dataType == DataType.ONDISK) {
-          val desc = request.flowDesc.asInstanceOf[FileDescription]
-          getFileData(desc)
-        } else if (dataType == DataType.INMEMORY) {
-          getObjectData(request.flowDesc)
-        } else {
-          Array[Byte]()
-        }
-        channel.write(ByteBuffer.wrap(message))
-        logDebug("send data successfully,size is %s,flow is %s".format(Utils.bytesToString(message.length),
-          request.flowDesc.dataId.dataId))
+      catch {
+        case e: Exception => logError("Error in select loop", e)
       }
-    } catch {
-      case e: Exception =>
-        logError("Failed to handle remote request", e)
-    } finally {
-      channel.close()
     }
   }
 
@@ -162,7 +133,7 @@ class NioDataServer(
   }
 
   def handleFakeRequest(request: GetRequest, channel: SocketChannel): Unit ={
-    val buf = ByteBuffer.allocate(65536)
+    val buf = ByteBuffer.allocate(request.flowDesc.sizeInBytes.toInt)
     var bytesSent = 0L
     while (bytesSent < request.flowDesc.sizeInBytes) {
       buf.clear()
@@ -174,11 +145,50 @@ class NioDataServer(
     }
   }
 
-  private[this] class RequestHandler(key: SelectionKey, doWorker: SelectionKey => Unit) extends Runnable {
-    override def run(): Unit = {
-      if(doWorker != null && key != null) {
-        doWorker.apply(key)
+  def doRead(key: SelectionKey): Unit = {
+    val channel = key.channel().asInstanceOf[SocketChannel]
+    try {
+      logDebug("starting to deal with data request from " + channel.getRemoteAddress.toString)
+      val data = Utils.readFromChannel(channel)
+      // channel 已经被关闭了
+      if(!data.isDefined) {
+        logDebug("Remote channel has closed,close it here too")
+        channel.close()
+      } else {
+        val request: GetRequest = serializer.deserialize[GetRequest](ByteBuffer.wrap(data.get))
+        channel.register(selector, SelectionKey.OP_WRITE, request)
       }
+    } catch {
+      case e: Exception => logError("failed to handle remote request", e)
     }
+  }
+
+  def doWrite(key: SelectionKey): Unit = {
+    val channel = key.channel().asInstanceOf[SocketChannel]
+    val request = key.attachment().asInstanceOf[GetRequest]
+    logDebug("starting send data for request[%s]".format(request.flowDesc.toString))
+    val dataType = request.flowDesc.dataType
+    // specially for fake data type
+    if (dataType == DataType.FAKE) {
+      handleFakeRequest(request, channel)
+    } else {
+      val message: Array[Byte] = if (dataType == DataType.ONDISK) {
+        val desc = request.flowDesc.asInstanceOf[FileDescription]
+        getFileData(desc)
+      } else if (dataType == DataType.INMEMORY) {
+        getObjectData(request.flowDesc)
+      } else {
+        Array[Byte]()
+      }
+      // Channel在写数据的时候，并不会一次把所有的数据都发送出去，因此得将数据分批发送！！
+      val data = ByteBuffer.wrap(message)
+      while(data.hasRemaining) {
+        channel.write(data)
+      }
+      logDebug("Send data successfully,flow is %s,data length is %s"
+        .format(request.flowDesc.dataId.dataId,
+          Utils.bytesToString(message.length)))
+    }
+    channel.register(selector, SelectionKey.OP_READ)
   }
 }

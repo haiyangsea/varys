@@ -1,6 +1,5 @@
 package varys.framework.client
 
-import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 
 import akka.actor._
@@ -11,24 +10,22 @@ import akka.pattern.ask
 import akka.pattern.AskTimeoutException
 import akka.remote.{RemotingLifecycleEvent, DisassociatedEvent}
 
-import java.io._
 import java.net._
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{Executors, ConcurrentHashMap}
 
 import scala.collection.mutable.HashMap
 import scala.collection.JavaConversions._
 
 import varys.{Logging, Utils, VarysException}
 import varys.framework._
-import varys.framework.master.{Master, CoflowInfo}
+import varys.framework.master.Master
 import varys.framework.slave.Slave
 import varys.util._
 import scala.concurrent.{ExecutionContext, Await}
-import java.nio.channels.FileChannel.MapMode
 
-// TODO 整合VarysClient和Slave中的数据存储,Short Flow Bytes
+// TODO 整合VarysClient和Slave中的数据存储,优化Flow数据获取
 class VarysClient(
-    clientName: String,
+    val clientName: String,
     masterUrl: String,
     listener: ClientListener = null)
   extends Logging {
@@ -38,6 +35,8 @@ class VarysClient(
   val RATE_UPDATE_FREQ = System.getProperty("varys.client.rateUpdateIntervalMillis", "100").toLong
   val SHORT_FLOW_BYTES = System.getProperty("varys.client.shortFlowMB", "0").toLong * 1048576
   val NIC_BPS = 1024 * 1048576
+
+  val MAX_FLOWS_REQUEST = System.getProperty("vayrs.client.request.flows.max", "1").toInt
 
   var actorSystem: ActorSystem = null
   
@@ -53,6 +52,7 @@ class VarysClient(
 
   // ExecutionContext for Futures
   implicit val futureExecContext = ExecutionContext.fromExecutor(Utils.newDaemonCachedThreadPool())
+  val executors = Executors.newCachedThreadPool()
 
   var regStartTime = 0L
 
@@ -68,6 +68,8 @@ class VarysClient(
   val serverThreadName = "ServerThread for Client@" + Utils.localHostName()
   var dataServer = new NioDataServer(clientHost, 0, serverThreadName, flowToObject)
   dataServer.start()
+
+  val channelPool = new ChannelPool()
 
   var clientPort = dataServer.port
 
@@ -156,7 +158,7 @@ class VarysClient(
         logInfo("Received updated shares")
         flowToBitPerSec.synchronized {
           for ((dataId, newBitPerSec) <- newRates) {
-            logTrace(dataId + " ==> " + newBitPerSec + " bps")
+            logDebug(dataId + " ==> " + newBitPerSec + " bps")
             flowToBitPerSec.put(dataId, newBitPerSec)
           }
         }
@@ -218,6 +220,8 @@ class VarysClient(
       clientActor = null
     }
     dataServer.stop()
+    channelPool.close()
+    executors.shutdown()
   }
   
   def awaitTermination() { 
@@ -426,7 +430,6 @@ class VarysClient(
       return (flowDesc, data)
     }
 
-    logDebug("Starting to fetch remote data at %s:%d".format(flowDesc.dataServerHost, flowDesc.dataServerPort))
     var st = now
     val channel = SocketChannel.open(new InetSocketAddress(flowDesc.dataServerHost, flowDesc.dataServerPort))
 
@@ -458,17 +461,27 @@ class VarysClient(
         }
       }
     } else {
-      // 数据必须少量几次全部读出来，否则程序会卡死
-      val buffer = new Array[Byte](flowDesc.sizeInBytes.toInt)
-      val length = tis.read(buffer)
-      logInfo("Received remote[%s:%d] response,got data size[%s] for flow[%s],expected size is %s"
+      retVal = new Array[Byte](flowDesc.sizeInBytes.toInt)
+      val receiveBufferSize = channel.socket().getReceiveBufferSize
+      var length = 0
+      var offset = 0
+      logDebug("Starting to fetch remote data at %s:%d,receive buffer size %s".format(
+        flowDesc.dataServerHost, flowDesc.dataServerPort, Utils.bytesToString(receiveBufferSize)))
+
+      val start = System.currentTimeMillis()
+      while(offset < retVal.length) {
+        length = Math.min(retVal.length, offset + receiveBufferSize) - offset
+        offset += tis.read(retVal, offset, length)
+      }
+      val duration = System.currentTimeMillis() - start
+      logInfo("Received remote[%s:%d] data response{size[%s],flow[%s],expected size[%s],duration[%d ms]}"
         .format(flowDesc.dataServerHost,
           flowDesc.dataServerPort,
           Utils.bytesToString(length),
           flowDesc.dataId.dataId,
-          Utils.bytesToString(flowDesc.sizeInBytes)))
-
-      if(length != flowDesc.sizeInBytes) {
+          Utils.bytesToString(flowDesc.sizeInBytes),
+          duration))
+      if(offset != flowDesc.sizeInBytes) {
         throw new VarysException("Data size dose not match,got data size %d,but expected %d"
           .format(retVal.length, flowDesc.sizeInBytes))
       }
@@ -635,7 +648,56 @@ class VarysClient(
   def getFile(fileId: String, coflowId: String): Array[Byte] = {
     handleGet(fileId, DataType.ONDISK, coflowId)
   }
-  
+
+  private[this] class FlowListenerWrapper(listener: FetchFlowListener) extends FetchFlowListener {
+    override def onComplete(flowId: String, coflowId: String, data: Array[Byte]): Unit = {
+      masterActor ! FlowProgress(
+        flowId,
+        coflowId,
+        data.length,
+        true)
+      listener.onComplete(flowId, coflowId, data)
+    }
+    override def onFailure(flowId: String, coflowId: String, length: Long, e: Throwable): Unit = {
+      masterActor ! FlowProgress(
+        flowId,
+        coflowId,
+        length,
+        false)
+      listener.onFailure(flowId, coflowId, length: Long, e)
+    }
+  }
+
+  def getFlows(flowIds: Seq[String], coflowId: String, listener: FetchFlowListener) {
+    val descriptions = AkkaUtils.askActorWithReply[Option[GotFlowDescs]](
+      masterActor,
+      GetFlows(flowIds.toArray, coflowId, clientId, slaveId))
+    if(!descriptions.isDefined) {
+      throw new VarysException(s"flows do not exist in coflow $coflowId!")
+    }
+    val flows = descriptions.get.flowDescs
+    AkkaUtils.tellActor(slaveActor, GetFlows(flowIds.toArray, coflowId, clientId, slaveId, flows))
+    logInfo("Starting fetch remote flows data for coflow " + coflowId)
+    flows.groupBy(flow => flow.dataServerHost).foreach(pair => {
+      val dataListener = new FlowListenerWrapper(listener)
+      val (host, flows) = pair
+      if(host == this.slaveHost) {
+        flows.foreach(flow => {
+          this.executors.submit(new LocalDataFetcher(flow, dataListener))
+        })
+      } else {
+        var left = flows
+        do {
+          val parts = left.splitAt(MAX_FLOWS_REQUEST)
+          left = parts._2
+          val fetcher = new RemoteDataFetcher(channelPool, parts._1.toSeq, dataListener, this.serializer, this)
+          this.executors.submit(fetcher)
+        } while(left.length > 0)
+      }
+    })
+  }
+
+
   /**
    * Paired get() for putFake. Doesn't return anything, but emulates the retrieval process.
    */

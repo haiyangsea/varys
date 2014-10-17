@@ -1,5 +1,7 @@
 package varys.framework
 
+import java.nio.ByteBuffer
+
 import akka.actor.ActorRef
 
 import varys.framework.master.{CoflowInfo, ClientInfo, SlaveInfo}
@@ -166,7 +168,25 @@ private[varys] case class GetRequest(
     
   // Not extending FrameworkMessage because it is NOT going through akka serialization
   override def toString: String = "GetRequest(" + flowDesc.id+ ":" + flowDesc.coflowId + ")"
-} 
+}
+
+private[varys] case class FetchFlowRequests(flows: Array[FlowDescription])
+
+private[varys] case class ResponseHeader(flowIdLength: Int, coflowIdLength: Int, dataLength: Int) {
+  val size = flowIdLength + coflowIdLength + dataLength
+}
+
+object ResponseHeader {
+  val HEADER_LENGTH = 4 + 4 + 4
+  def getHeaderFromBuffer(buffer: ByteBuffer): ResponseHeader = {
+    val idLength = buffer.getInt
+    val coflowLength = buffer.getInt
+    val dataLength = buffer.getInt
+    ResponseHeader(idLength, coflowLength, dataLength)
+  }
+}
+
+private[varys] case class FlowsData(data: Array[ResponseHeader])
 
 // Internal message in Master
 private[varys] case object ScheduleRequest
