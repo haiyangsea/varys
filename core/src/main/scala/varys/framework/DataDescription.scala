@@ -16,8 +16,8 @@ private[varys] class FlowDescription(
     val dataType: DataType.DataType,  // http://www.scala-lang.org/node/7661
     val sizeInBytes: Long,
     val maxReceivers: Int,  // Upper-bound on the number of receivers (how long to keep it around?)
-    var dataServerHost: String,
-    var dataServerPort: Int)
+    var host: String,
+    var port: Int)
   extends Serializable {
 
   val dataId = DataIdentifier(id, coflowId)
@@ -27,15 +27,15 @@ private[varys] class FlowDescription(
     " # " + sizeInBytes + " Bytes)"
   
   def updateServerPort(port: Int) {
-    dataServerPort = port
+    this.port = port
   }
   
   def updateServerHost(host: String): Unit = {
-    dataServerHost = host
+    this.host = host
   }
 }
 
-private[varys] class FileDescription(
+private[varys] class FileFlowDescription(
     flowId : String,  // Expected to be unique within the coflow
     val pathToFile: String,
     coflowId : String,  // Must be a valid coflow
@@ -51,7 +51,7 @@ private[varys] class FileDescription(
     ":" + coflowId + " # " + sizeInBytes + " Bytes)"
 }
 
-private[varys] class ObjectDescription(
+private[varys] class ObjectFlowDescription(
     val id_ : String,  // Expected to be unique within the coflow
     val className: String, 
     val cId_ : String,  // Must be a valid coflow
@@ -64,4 +64,17 @@ private[varys] class ObjectDescription(
 
   override def toString: String = "ObjectDescription(" + id + "["+ className + "]:" + dataType + 
     ":" + coflowId + " # " + sizeInBytes + " Bytes)"
+}
+
+private[varys] class FakeFlowDescription(
+    id: String,
+    cId: String,
+    dataType: DataType.DataType,
+    dataSize: Long,
+    maxR: Int,
+    host: String,
+    port: Int) 
+  extends FlowDescription(id, cId, dataType, dataSize, maxR, host, port) {
+  
+  override def toString: String = s"FakeDataDescription($id : $dataType : $coflowId #$sizeInBytes Bytes)"
 }

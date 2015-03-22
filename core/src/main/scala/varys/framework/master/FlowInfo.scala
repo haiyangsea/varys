@@ -9,7 +9,7 @@ import varys.framework.FlowDescription
 private[varys] class FlowInfo(
     val desc: FlowDescription) {
   
-  var source = desc.dataServerHost
+  var source = desc.host
   var destClient:ClientInfo = null
   var currentBps = 0.0
   var lastScheduled: Long = 0L

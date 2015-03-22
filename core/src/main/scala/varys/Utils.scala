@@ -20,7 +20,7 @@ import scala.Some
 
 import sun.nio.ch.DirectBuffer
 import scala.reflect.ClassTag
-import varys.framework.FileDescription
+import varys.framework.FileFlowDescription
 import java.nio.channels.FileChannel.MapMode
 
 /**
@@ -183,7 +183,7 @@ private object Utils extends Logging {
    * Return a string containing part of a file from byte 'start' to 'end'. 
    */
   def offsetBytes(path: String, start: Long, end: Long): String = {
-    val file = new File(path)
+    val file = new FileFlowDescription(path)
     val length = file.length()
     val effectiveEnd = math.min(length, end)
     val effectiveStart = math.max(0, start)
@@ -196,7 +196,7 @@ private object Utils extends Logging {
     Source.fromBytes(buff).mkString
   }
 
-  def readFileUseNIO(desc: FileDescription): Array[Byte] = {
+  def readFileUseNIO(desc: FileFlowDescription): Array[Byte] = {
     val path = desc.pathToFile
     val fileChannel = new RandomAccessFile(path, "r").getChannel
     val buffer = ByteBuffer.allocate(desc.length.toInt)

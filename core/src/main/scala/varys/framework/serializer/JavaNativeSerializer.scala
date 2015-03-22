@@ -8,9 +8,9 @@ import varys.Logging
 import scala.reflect.ClassTag
 
 /**
- * Created by hWX221863 on 2014/9/30.
+ * Java native serializer
  */
-class JavaSerializer extends Serializer with Logging{
+class JavaNativeSerializer extends Serializer with Logging {
   override def serialize[T: ClassTag](t: T): ByteBuffer = {
     val baos: ByteArrayOutputStream = new ByteArrayOutputStream()
     val oos : ObjectOutputStream = new ObjectOutputStream(baos)

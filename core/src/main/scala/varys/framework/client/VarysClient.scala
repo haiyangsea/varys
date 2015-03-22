@@ -301,7 +301,7 @@ class VarysClient(
    * FIXME: Handles only DataType.FAKE right now.
    */
   private def handlePutMultiple(
-      flowDescs: Array[FlowDescription], 
+      flowDescs: Array[FlowDescription],
       coflowId: String, 
       dataType: DataType.DataType) {
     
@@ -334,7 +334,7 @@ class VarysClient(
     // TODO: Figure out class name
     val className = "UnknownType" 
     val desc = 
-      new ObjectDescription(
+      new ObjectFlowDescription(
         objId, 
         className, 
         coflowId, 
@@ -367,7 +367,7 @@ class VarysClient(
       numReceivers: Int) {
     
     val desc = 
-      new FileDescription(
+      new FileFlowDescription(
         fileId, 
         pathToFile, 
         coflowId, 
@@ -423,15 +423,15 @@ class VarysClient(
   @throws(classOf[VarysException])
   private def getOne(flowDesc: FlowDescription): (FlowDescription, Array[Byte]) = {
     // file in local file system,read it directly using nio instead of from net
-    if(flowDesc.dataType == DataType.ONDISK && flowDesc.dataServerHost == this.slaveHost) {
-      val desc = flowDesc.asInstanceOf[FileDescription]
+    if(flowDesc.dataType == DataType.ONDISK && flowDesc.host == this.slaveHost) {
+      val desc = flowDesc.asInstanceOf[FileFlowDescription]
       logInfo("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
       val data = Utils.readFileUseNIO(desc)
       return (flowDesc, data)
     }
 
     var st = now
-    val channel = SocketChannel.open(new InetSocketAddress(flowDesc.dataServerHost, flowDesc.dataServerPort))
+    val channel = SocketChannel.open(new InetSocketAddress(flowDesc.host, flowDesc.port))
 
     // Don't wait for scheduling for 'SHORT' flows
     val tisRate = if (flowDesc.sizeInBytes > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
@@ -466,7 +466,7 @@ class VarysClient(
       var length = 0
       var offset = 0
       logDebug("Starting to fetch remote data at %s:%d,receive buffer size %s".format(
-        flowDesc.dataServerHost, flowDesc.dataServerPort, Utils.bytesToString(receiveBufferSize)))
+        flowDesc.host, flowDesc.port, Utils.bytesToString(receiveBufferSize)))
 
       val start = System.currentTimeMillis()
       while(offset < retVal.length) {
@@ -475,8 +475,8 @@ class VarysClient(
       }
       val duration = System.currentTimeMillis() - start
       logInfo("Received remote[%s:%d] data response{size[%s],flow[%s],expected size[%s],duration[%d ms]}"
-        .format(flowDesc.dataServerHost,
-          flowDesc.dataServerPort,
+        .format(flowDesc.host,
+          flowDesc.port,
           Utils.bytesToString(length),
           flowDesc.dataId.dataId,
           Utils.bytesToString(flowDesc.sizeInBytes),
@@ -588,7 +588,7 @@ class VarysClient(
     AkkaUtils.tellActor(slaveActor, GetFlows(blockIds, coflowId, clientId, slaveId, flowDescs))
     
     // Get 'em!
-    val recvLock = new Object()
+    val recvLock = new ObjectFlowDescription()
     var recvFinished = 0
 
     for (flowDesc <- flowDescs) {
@@ -678,7 +678,7 @@ class VarysClient(
     val flows = descriptions.get.flowDescs
     AkkaUtils.tellActor(slaveActor, GetFlows(flowIds.toArray, coflowId, clientId, slaveId, flows))
     logInfo("Starting fetch remote flows data for coflow " + coflowId)
-    flows.groupBy(flow => flow.dataServerHost).foreach(pair => {
+    flows.groupBy(flow => flow.host).foreach(pair => {
       val dataListener = new FlowListenerWrapper(listener)
       val (host, flows) = pair
       if(host == this.slaveHost) {

@@ -17,8 +17,8 @@ class RemoteDataFetcher(
    client: VarysClient)
   extends Runnable with Logging {
 
-  val host = flows.head.dataServerHost
-  val port = flows.head.dataServerPort
+  val host = flows.head.host
+  val port = flows.head.port
 
   // TODO 添加可控制加载数据量模块，以防OOM
   override def run(): Unit = {

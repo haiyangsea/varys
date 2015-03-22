@@ -12,7 +12,7 @@ class LocalDataFetcher(
   extends Runnable with Logging{
 
   override def run(): Unit = {
-    val desc = flow.asInstanceOf[FileDescription]
+    val desc = flow.asInstanceOf[FileFlowDescription]
     logDebug("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
     val data = Utils.readFileUseNIO(desc)
     listener.complete(flow.id, flow.coflowId, data)

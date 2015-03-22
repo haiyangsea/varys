@@ -117,7 +117,7 @@ class NioDataServer(
     }
   }
 
-  def getFileData(desc: FileDescription): Array[Byte] = {
+  def getFileData(desc: FileFlowDescription): Array[Byte] = {
     logInfo("receive get file[%s] request".format(desc.pathToFile))
     val data = Utils.readFileUseNIO(desc)
     data
@@ -173,7 +173,7 @@ class NioDataServer(
       handleFakeRequest(request, channel)
     } else {
       val message: Array[Byte] = if (dataType == DataType.ONDISK) {
-        val desc = request.flowDesc.asInstanceOf[FileDescription]
+        val desc = request.flowDesc.asInstanceOf[FileFlowDescription]
         getFileData(desc)
       } else if (dataType == DataType.INMEMORY) {
         getObjectData(request.flowDesc)
