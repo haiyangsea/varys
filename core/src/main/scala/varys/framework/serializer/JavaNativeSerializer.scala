@@ -28,3 +28,4 @@ class JavaNativeSerializer extends Serializer with Logging {
     obj
   }
 }
+

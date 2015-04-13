@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import org.hyperic.sigar.{Sigar, SigarException}
+import varys.framework.network.DataService
 
 import scala.collection.mutable.{HashMap}
 import scala.concurrent.duration._
@@ -30,7 +31,7 @@ private[varys] class SlaveActor(
   val HEARTBEAT_SEC = System.getProperty("varys.framework.heartbeat", "1").toInt
 
   val serverThreadName = "ServerThread for Slave@" + Utils.localHostName()
-  val dataServer: NioDataServer = new NioDataServer(ip, 0, serverThreadName)
+  val dataServer = DataService.getDataService.getServer
 
   // TODO: Keep track of local data
   val idsToFlow = new HashMap[(String, String), FlowDescription]
@@ -158,13 +159,14 @@ private[varys] class SlaveActor(
       logDebug("Received AddFlow for " + flowDesc)
 
       // Update commPort if the end point will be a client
-      if (flowDesc.dataType != DataType.INMEMORY) {
-        flowDesc.updateServerPort(dataServer.port)
-        flowDesc.updateServerHost(dataServer.address)
+      val newDesc = if (flowDesc.dataType != DataType.INMEMORY) {
+        flowDesc.copy(host = dataServer.host, port = dataServer.port)
+      } else {
+        flowDesc
       }
 
       // Now let the master know and notify the client
-      AkkaUtils.tellActor(master, AddFlow(flowDesc))
+      AkkaUtils.tellActor(master, AddFlow(newDesc))
       sender ! Success
     }
 
@@ -173,12 +175,14 @@ private[varys] class SlaveActor(
       logDebug("Received AddFlows for coflow " + coflowId)
 
       // Update commPort if the end point will be a client
-      if (dataType != DataType.INMEMORY) {
-        flowDescs.foreach(_.updateServerPort(port))
+      val newFlowDescs = if (dataType != DataType.INMEMORY) {
+        flowDescs.map(_.copy(host = dataServer.host, port = dataServer.port))
+      } else {
+        flowDescs
       }
 
       // Now let the master know and notify the client
-      AkkaUtils.tellActor(master, AddFlows(flowDescs, coflowId, dataType))
+      AkkaUtils.tellActor(master, AddFlows(newFlowDescs, coflowId, dataType))
       sender ! Success
     }
 

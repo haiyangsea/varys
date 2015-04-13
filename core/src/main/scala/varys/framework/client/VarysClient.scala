@@ -4,6 +4,7 @@ import java.nio.channels.SocketChannel
 
 import akka.actor._
 import akka.actor.Terminated
+import varys.framework.network.DataService
 import varys.framework.serializer.Serializer
 import scala.concurrent.duration._
 import akka.pattern.ask
@@ -50,6 +51,8 @@ class VarysClient(
   var clientId: String = null
   var clientActor: ActorRef = null
 
+  val dataService  = DataService.getDataService
+
   // ExecutionContext for Futures
   implicit val futureExecContext = ExecutionContext.fromExecutor(Utils.newDaemonCachedThreadPool())
   val executors = Executors.newCachedThreadPool()
@@ -62,15 +65,12 @@ class VarysClient(
   val flowToBitPerSec = new ConcurrentHashMap[DataIdentifier, Double]()
   val flowToObject = new HashMap[DataIdentifier, Array[Byte]]
 
-  var clientHost = Utils.localIpAddress
-  var slaveHost: String = null
-
   val serverThreadName = "ServerThread for Client@" + Utils.localHostName()
-  var dataServer = new NioDataServer(clientHost, 0, serverThreadName, flowToObject)
+  var dataServer = dataService.getServer
   dataServer.start()
 
-  val channelPool = new ChannelPool()
-
+  var clientHost = dataServer.host
+  var slaveHost: String = null
   var clientPort = dataServer.port
 
   val serializer: Serializer = Utils.getSerializer
@@ -220,7 +220,6 @@ class VarysClient(
       clientActor = null
     }
     dataServer.stop()
-    channelPool.close()
     executors.shutdown()
   }
   
@@ -286,12 +285,6 @@ class VarysClient(
     AkkaUtils.tellActor(slaveActor, AddFlow(flowDesc))
     
     logInfo("Registered " + flowDesc + " in " + (now - st) + " milliseconds")
-    
-    // Keep a reference to the object to be served when asked for.
-    if (flowDesc.dataType == DataType.INMEMORY) {
-      assert(serialObj != null)
-      flowToObject(flowDesc.dataId) = serialObj
-    } 
   }
 
   /**
@@ -332,7 +325,7 @@ class VarysClient(
       numReceivers: Int) {
     
     // TODO: Figure out class name
-    val className = "UnknownType" 
+    val className = Utils.getClassName(obj)
     val desc = 
       new ObjectFlowDescription(
         objId, 
@@ -345,7 +338,8 @@ class VarysClient(
         clientPort)
 
     val serialObj = Utils.serialize[T](obj)
-    handlePut(desc, serialObj)
+//    handlePut(desc, serialObj)
+    dataServer.putObjectData(desc)
   }
   
   /**
@@ -392,7 +386,7 @@ class VarysClient(
         DataType.FAKE, 
         size, 
         numReceivers, 
-        clientHost, 
+        clientHost,
         clientPort)
 
     handlePut(desc)
@@ -410,19 +404,19 @@ class VarysClient(
           coflowId, 
           DataType.FAKE, 
           blk._2, 
-          blk._3, 
-          clientHost, 
+          blk._3,
+          clientHost,
           clientPort))
 
     handlePutMultiple(descs, coflowId, DataType.FAKE)
   }
-  
+
   /**
    * Performs exactly one get operation
    */
   @throws(classOf[VarysException])
   private def getOne(flowDesc: FlowDescription): (FlowDescription, Array[Byte]) = {
-    // file in local file system,read it directly using nio instead of from net
+    // file in local file system,read it directly using nio instead of through net
     if(flowDesc.dataType == DataType.ONDISK && flowDesc.host == this.slaveHost) {
       val desc = flowDesc.asInstanceOf[FileFlowDescription]
       logInfo("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
@@ -442,7 +436,7 @@ class VarysClient(
     val buffer = serializer.serialize(GetRequest(flowDesc))
     logDebug("Serialized get request object,size is " + buffer.remaining())
     channel.write(buffer)
-    
+
     var retVal: Array[Byte] = null
 
     st = now
@@ -486,14 +480,14 @@ class VarysClient(
           .format(retVal.length, flowDesc.sizeInBytes))
       }
     }
-    logTrace("Received " + flowDesc.sizeInBytes + " bytes for " + flowDesc + " in " + (now - st) + 
+    logTrace("Received " + flowDesc.sizeInBytes + " bytes for " + flowDesc + " in " + (now - st) +
       " milliseconds")
-    
+
     // Close everything
     flowToTIS.remove(flowDesc.dataId)
     tis.close
     channel.close
-    
+
     (flowDesc, retVal)
   }
   
@@ -588,7 +582,7 @@ class VarysClient(
     AkkaUtils.tellActor(slaveActor, GetFlows(blockIds, coflowId, clientId, slaveId, flowDescs))
     
     // Get 'em!
-    val recvLock = new ObjectFlowDescription()
+    val recvLock = new Object
     var recvFinished = 0
 
     for (flowDesc <- flowDescs) {

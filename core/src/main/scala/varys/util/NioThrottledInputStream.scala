@@ -6,9 +6,6 @@ import java.nio.channels.SocketChannel
 
 import varys.Logging
 
-/**
- * Created by hWX221863 on 2014/10/9.
- */
 class NioThrottledInputStream(
    val channel: SocketChannel,
    val ownerName: String,

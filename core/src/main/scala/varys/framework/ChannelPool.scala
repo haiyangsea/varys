@@ -3,7 +3,7 @@ package varys.framework
 import java.net.InetSocketAddress
 import java.nio.channels.SocketChannel
 
-import varys.framework.io.DataCenterAddress
+import varys.framework.client.DataCenterAddress
 
 import scala.collection.mutable
 
@@ -22,7 +22,7 @@ class ChannelPool {
     if(queue.isDefined && queue.get.size > 0) {
       queue.get.dequeue()
     } else {
-      SocketChannel.open(address.socketAddress)
+      SocketChannel.open(address.inetSocketAddress)
     }
   }
 

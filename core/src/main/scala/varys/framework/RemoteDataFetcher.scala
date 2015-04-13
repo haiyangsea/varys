@@ -1,7 +1,6 @@
 package varys.framework
 
-import varys.framework.client.{FetchFlowListener, VarysClient}
-import varys.framework.io.DataCenterAddress
+import varys.framework.client.{DataCenterAddress, FetchFlowListener, VarysClient}
 import varys.framework.serializer.Serializer
 import varys.util.NioThrottledInputStream
 import varys.{Logging, Utils}

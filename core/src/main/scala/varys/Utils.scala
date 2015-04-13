@@ -183,7 +183,7 @@ private object Utils extends Logging {
    * Return a string containing part of a file from byte 'start' to 'end'. 
    */
   def offsetBytes(path: String, start: Long, end: Long): String = {
-    val file = new FileFlowDescription(path)
+    val file = new File(path)
     val length = file.length()
     val effectiveEnd = math.min(length, end)
     val effectiveStart = math.max(0, start)
@@ -233,5 +233,12 @@ private object Utils extends Logging {
       Some(byteStream.toByteArray)
     }
 
+  }
+
+  def getClassName[T: Manifest](obj: T): String = {
+    import scala.reflect.runtime.{universe => ru}
+    val rm = ru.runtimeMirror(getClass.getClassLoader)
+    val cla = rm.reflect(obj)
+    cla.symbol.fullName
   }
 }
