@@ -13,11 +13,11 @@ import java.util.Arrays;
 public class OpenFlows extends FlowTransferMessage
 {
   public final String coflowId;
-  public final FlowRequest[] flowIds;
+  public final FlowRequestArray flowRequests;
 
-  public OpenFlows(String coflowId, FlowRequest[] flowIds) {
+  public OpenFlows(String coflowId, FlowRequestArray flowRequests) {
     this.coflowId = coflowId;
-    this.flowIds = flowIds;
+    this.flowRequests = flowRequests;
   }
 
   @Override
@@ -26,31 +26,31 @@ public class OpenFlows extends FlowTransferMessage
   @Override
   public int encodedLength() {
     return Encoders.Strings.encodedLength(coflowId)
-            + Encoders.StringArrays.encodedLength(flowIds);
+            + flowRequests.encodedLength();
   }
 
   @Override
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, coflowId);
-    Encoders.StringArrays.encode(buf, flowIds);
+    flowRequests.encode(buf);
   }
 
   public static OpenFlows decode(ByteBuf buf) {
     String coflowId = Encoders.Strings.decode(buf);
-    String[] flowIds = Encoders.StringArrays.decode(buf);
-    return new OpenFlows(coflowId, flowIds);
+    FlowRequestArray flowRequests = FlowRequestArray.decode(buf);
+    return new OpenFlows(coflowId, flowRequests);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(coflowId) * 41 + Arrays.hashCode(flowIds);
+    return Objects.hashCode(coflowId) * 41 + Arrays.hashCode(flowRequests.requests);
   }
 
   @Override
   public String toString() {
     return Objects.toStringHelper(this)
             .add("coflowId", coflowId)
-            .add("flowIds", Arrays.toString(flowIds))
+            .add("flowIds", Arrays.toString(flowRequests.requests))
             .toString();
   }
 
@@ -59,7 +59,7 @@ public class OpenFlows extends FlowTransferMessage
     if (other != null && other instanceof OpenFlows) {
       OpenFlows o = (OpenFlows) other;
       return Objects.equal(coflowId, o.coflowId)
-              && Arrays.equals(flowIds, o.flowIds);
+              && Arrays.equals(flowRequests.requests, o.flowRequests.requests);
     }
     return false;
   }

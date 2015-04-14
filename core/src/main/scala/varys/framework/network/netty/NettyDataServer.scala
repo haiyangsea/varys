@@ -14,12 +14,12 @@ import scala.collection.mutable.HashMap
 class NettyDataServer(server: TransportServer) extends DataServer {
   val flowToObject = new HashMap[DataIdentifier, ByteBuffer]
 
-  override def putObjectData(desc: ObjectFlowDescription, data: ByteBuffer): Unit = {
-    flowToObject += desc.dataId -> data
+  override def putObjectData(id: DataIdentifier, data: ByteBuffer): Unit = {
+    flowToObject += id -> data
   }
 
-  def getObjectData(desc: ObjectFlowDescription): ByteBuffer = {
-    flowToObject.get(desc.dataId).getOrElse(sys.error(s"${desc.dataId} dose not exist!"))
+  def getObjectData(id: DataIdentifier): ByteBuffer = {
+    flowToObject.get(id).getOrElse(sys.error(s"$id dose not exist!"))
   }
 
   override def stop(): Unit = server.close()

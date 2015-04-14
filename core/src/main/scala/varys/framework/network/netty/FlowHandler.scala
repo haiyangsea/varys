@@ -1,7 +1,7 @@
 package varys.framework.network.netty
 
 import varys.framework.network.netty.client.{RpcResponseCallback, TransportClient}
-import varys.framework.network.netty.message.{FlowTransferMessage, OpenFlows}
+import varys.framework.network.netty.message.{FileFlowRequest, FlowTransferMessage, OpenFlows}
 import varys.framework.network.netty.server.{OneForOneStreamManager, StreamManager, RpcHandler}
 
 /**
@@ -18,6 +18,10 @@ class FlowHandler extends RpcHandler {
 
     message match {
       case openFlows: OpenFlows =>
+        openFlows.flowRequests.requests.head match {
+          case _: FileFlowRequest =>
+            openFlows.flowRequests.requests.map(_.asInstanceOf[FileFlowRequest])
+        }
 
     }
   }
