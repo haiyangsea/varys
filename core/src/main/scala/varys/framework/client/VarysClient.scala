@@ -337,9 +337,9 @@ class VarysClient(
         clientHost, 
         clientPort)
 
-    val serialObj = Utils.serialize[T](obj)
+    val serialObj = serializer.serialize(obj)
 //    handlePut(desc, serialObj)
-    dataServer.putObjectData(desc)
+    dataServer.putObjectData(desc, serialObj)
   }
   
   /**
@@ -394,7 +394,7 @@ class VarysClient(
   
   /**
    * Puts multiple blocks at the same time of same size and same number of receivers
-   * blocks => (blockId, blockSize, numReceivers)
+   * blocks => (flowId, blockSize, numReceivers)
    */ 
   def putFakeMultiple(blocks: Array[(String, Long, Int)], coflowId: String) {
     val descs = 

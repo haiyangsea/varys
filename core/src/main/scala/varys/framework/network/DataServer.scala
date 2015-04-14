@@ -1,16 +1,14 @@
 package varys.framework.network
 
+import java.nio.ByteBuffer
+
 import varys.framework.{FlowDescription, FileFlowDescription, ObjectFlowDescription}
 
 /**
  * Created by Allen on 2015/4/13.
  */
 trait DataServer {
-  def putObjectData(desc: ObjectFlowDescription): Unit
-
-  def putFileData(desc: FileFlowDescription): Unit
-
-  def putFakeData(desc: FlowDescription): Unit
+  def putObjectData(desc: ObjectFlowDescription, data: ByteBuffer): Unit
 
   def start(): Unit
 

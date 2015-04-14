@@ -1,9 +1,5 @@
 package varys.framework.network
 
-import java.nio.ByteBuffer
-
-import varys.framework.{FakeFlowDescription, ObjectFlowDescription, FlowDescription, FileFlowDescription}
-
 import scala.util.Try
 
 trait DataService {
