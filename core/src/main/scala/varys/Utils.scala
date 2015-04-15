@@ -196,8 +196,8 @@ private object Utils extends Logging {
     Source.fromBytes(buff).mkString
   }
 
-  def readFileUseNIO(desc: FileFlowDescription): Array[Byte] = {
-    val path = desc.pathToFile
+  def readFileUseNIO(desc: FileFlowDescription): ByteBuffer = {
+    val path = desc.path
     val fileChannel = new RandomAccessFile(path, "r").getChannel
     val buffer = ByteBuffer.allocate(desc.length.toInt)
     try {
@@ -205,7 +205,7 @@ private object Utils extends Logging {
     } finally {
       fileChannel.close()
     }
-    buffer.array()
+    buffer
   }
 
   def getSerializer: Serializer = {

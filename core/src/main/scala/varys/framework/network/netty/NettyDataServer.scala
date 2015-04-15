@@ -2,6 +2,7 @@ package varys.framework.network.netty
 
 import java.nio.ByteBuffer
 
+import varys.Utils
 import varys.framework.network.netty.server.TransportServer
 import varys.framework.{DataIdentifier, ObjectFlowDescription}
 import varys.framework.network.DataServer
@@ -24,7 +25,7 @@ class NettyDataServer(server: TransportServer) extends DataServer {
 
   override def stop(): Unit = server.close()
 
-  override def host: String = server.getHost
+  override def host: String = Utils.localIpAddress
 
   override def port: Int = server.getPort
 

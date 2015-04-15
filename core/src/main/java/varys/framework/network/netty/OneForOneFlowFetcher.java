@@ -2,10 +2,13 @@ package varys.framework.network.netty;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import varys.framework.network.FlowFetchingListener;
 import varys.framework.network.netty.buffer.ManagedBuffer;
 import varys.framework.network.netty.client.ChunkReceivedCallback;
 import varys.framework.network.netty.client.RpcResponseCallback;
 import varys.framework.network.netty.client.TransportClient;
+import varys.framework.network.netty.message.FlowRequest;
+import varys.framework.network.netty.message.FlowRequestArray;
 import varys.framework.network.netty.message.FlowTransferMessage;
 import varys.framework.network.netty.message.OpenFlows;
 import varys.framework.network.netty.protocol.StreamHandle;
@@ -20,22 +23,24 @@ public class OneForOneFlowFetcher {
 
   private final TransportClient client;
   private final OpenFlows openMessage;
-  private final String[] blockIds;
+  private final FlowRequestArray requests;
   private final FlowFetchingListener listener;
   private final ChunkReceivedCallback chunkCallback;
+  private final String coflowId;
 
   private StreamHandle streamHandle = null;
 
   public OneForOneFlowFetcher(
           TransportClient client,
           String coflowId,
-          String[] flowIds,
+          FlowRequestArray requests,
           FlowFetchingListener listener) {
     this.client = client;
-    this.openMessage = new OpenFlows(coflowId, flowIds);
-    this.blockIds = flowIds;
+    this.openMessage = new OpenFlows(coflowId, requests);
+    this.requests = requests;
     this.listener = listener;
     this.chunkCallback = new ChunkCallback();
+    this.coflowId = coflowId;
   }
 
   /** Callback invoked on receipt of each chunk. We equate a single chunk to a single block. */
@@ -43,20 +48,20 @@ public class OneForOneFlowFetcher {
     @Override
     public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
       // On receipt of a chunk, pass it upwards as a block.
-      listener.onFlowFetchSuccess(blockIds[chunkIndex], buffer);
+      listener.onFlowFetchSuccess(coflowId, requests.requests[chunkIndex].flowId, buffer);
     }
 
     @Override
     public void onFailure(int chunkIndex, Throwable e) {
       // On receipt of a failure, fail every block from chunkIndex onwards.
-      String[] remainingBlockIds = Arrays.copyOfRange(blockIds, chunkIndex, blockIds.length);
+      FlowRequest[] remainingBlockIds = Arrays.copyOfRange(requests.requests, chunkIndex, requests.length);
       failRemainingBlocks(remainingBlockIds, e);
     }
   }
 
   public void start() {
-    if (blockIds.length == 0) {
-      throw new IllegalArgumentException("Zero-sized blockIds array");
+    if (requests.length == 0) {
+      throw new IllegalArgumentException("Zero-sized requests array");
     }
 
     client.sendRpc(openMessage.toByteArray(), new RpcResponseCallback() {
@@ -73,23 +78,23 @@ public class OneForOneFlowFetcher {
           }
         } catch (Exception e) {
           logger.error("Failed while starting block fetches after success", e);
-          failRemainingBlocks(blockIds, e);
+          failRemainingBlocks(requests.requests, e);
         }
       }
 
       @Override
       public void onFailure(Throwable e) {
         logger.error("Failed while starting block fetches", e);
-        failRemainingBlocks(blockIds, e);
+        failRemainingBlocks(requests.requests, e);
       }
     });
   }
 
   /** Invokes the "onBlockFetchFailure" callback for every listed block id. */
-  private void failRemainingBlocks(String[] failedBlockIds, Throwable e) {
-    for (String blockId : failedBlockIds) {
+  private void failRemainingBlocks(FlowRequest[] failedFlows, Throwable e) {
+    for (FlowRequest flow : failedFlows) {
       try {
-        listener.onFlowFetchFailure(blockId, e);
+        listener.onFlowFetchFailure(coflowId, flow.flowId, e);
       } catch (Exception e2) {
         logger.error("Error in block fetch failure callback", e2);
       }

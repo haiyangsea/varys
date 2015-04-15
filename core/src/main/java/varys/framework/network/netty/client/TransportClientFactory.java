@@ -24,6 +24,8 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.*;
 import io.netty.channel.socket.SocketChannel;
+import varys.framework.network.RateThrottle;
+import varys.framework.network.Throttle;
 import varys.framework.network.netty.TransportContext;
 import varys.framework.network.netty.server.TransportChannelHandler;
 import varys.framework.network.netty.util.IOMode;
@@ -116,7 +118,7 @@ public class TransportClientFactory implements Closeable
    *
    * Concurrency: This method is safe to call from multiple threads.
    */
-  public TransportClient createClient(String remoteHost, int remotePort) throws IOException
+  public TransportClient createClient(String remoteHost, int remotePort, double initBitPerSec) throws IOException
   {
     // Get connection from the connection pool first.
     // If it is not found or not active, create a new one.
@@ -134,6 +136,8 @@ public class TransportClientFactory implements Closeable
 
     if (cachedClient != null && cachedClient.isActive()) {
       logger.trace("Returning cached connection to {}: {}", address, cachedClient);
+      // update cached throttle rate to init rate
+      cachedClient.throttle.updateRate(initBitPerSec);
       return cachedClient;
     }
 
@@ -145,18 +149,19 @@ public class TransportClientFactory implements Closeable
       if (cachedClient != null) {
         if (cachedClient.isActive()) {
           logger.trace("Returning cached connection to {}: {}", address, cachedClient);
+          cachedClient.throttle.updateRate(initBitPerSec);
           return cachedClient;
         } else {
           logger.info("Found inactive connection to {}, creating a new one.", address);
         }
       }
-      clientPool.clients[clientIndex] = createClient(address);
+      clientPool.clients[clientIndex] = createClient(address, initBitPerSec);
       return clientPool.clients[clientIndex];
     }
   }
 
   /** Create a completely new {@link TransportClient} to the remote address. */
-  private TransportClient createClient(InetSocketAddress address) throws IOException
+  private TransportClient createClient(InetSocketAddress address, double initBitPerSec) throws IOException
   {
     logger.debug("Creating new connection to " + address);
 
@@ -170,11 +175,12 @@ public class TransportClientFactory implements Closeable
       .option(ChannelOption.ALLOCATOR, pooledAllocator);
 
     final AtomicReference<TransportClient> clientRef = new AtomicReference<TransportClient>();
+    final Throttle throttle = new RateThrottle(initBitPerSec);
 
     bootstrap.handler(new ChannelInitializer<SocketChannel>() {
       @Override
       public void initChannel(SocketChannel ch) {
-        TransportChannelHandler clientHandler = context.initializePipeline(ch);
+        TransportChannelHandler clientHandler = context.initializePipeline(ch, throttle);
         clientRef.set(clientHandler.getClient());
       }
     });

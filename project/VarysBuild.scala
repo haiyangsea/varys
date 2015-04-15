@@ -7,11 +7,11 @@ import com.github.bigtoast.sbtthrift.ThriftPlugin
 import Classpaths.managedJars
 
 object VarysBuild extends Build {
-  lazy val root = Project("root", file("."), settings = rootSettings) aggregate(core, examples)
+  lazy val root = Project("root", file("."), settings = rootSettings) aggregate(core)
 
   lazy val core = Project("core", file("core"), settings = coreSettings)
 
-  lazy val examples = Project("examples", file("examples"), settings = examplesSettings) dependsOn (core)
+//  lazy val examples = Project("examples", file("examples"), settings = examplesSettings) dependsOn (core)
 
   lazy val jarsToExtract = TaskKey[Seq[File]]("jars-to-extract", "JAR files to be extracted")
 
@@ -66,7 +66,8 @@ object VarysBuild extends Build {
       "org.fusesource" % "sigar" % sigarVersion classifier "" classifier "native",
       "com.esotericsoftware.kryo" % "kryo" % "2.19",
       "javax.servlet" % "javax.servlet-api" % "3.0.1",
-      "org.scalatest" %% "scalatest" % "2.1.5" % "test"
+      "org.scalatest" %% "scalatest" % "2.1.5" % "test",
+      "org.scala-lang" % "scala-reflect" % "2.10.4"
       // akka-kryo-serialization has been added in an hackish way. We've compiled locally, then uploaded the jar to my website.
 //      "akka-kryo-serialization" % "akka-kryo-serialization" % "0.2-SNAPSHOT" from "http://mosharaf.com/akka-kryo-serialization-0.2-SNAPSHOT.jar"
     ),

@@ -1,17 +1,19 @@
 package varys.framework.client
 
+import java.nio.ByteBuffer
 import java.nio.channels.SocketChannel
 
 import akka.actor._
 import akka.actor.Terminated
-import varys.framework.network.DataService
+import varys.framework.network.netty.buffer.ManagedBuffer
+import varys.framework.network._
+import varys.framework.network.netty.message.{FlowRequestArray, FlowRequest, FileFlowRequest}
 import varys.framework.serializer.Serializer
 import scala.concurrent.duration._
 import akka.pattern.ask
 import akka.pattern.AskTimeoutException
 import akka.remote.{RemotingLifecycleEvent, DisassociatedEvent}
 
-import java.net._
 import java.util.concurrent.{Executors, ConcurrentHashMap}
 
 import scala.collection.mutable.HashMap
@@ -59,7 +61,7 @@ class VarysClient(
 
   var regStartTime = 0L
 
-  val flowToTIS = new ConcurrentHashMap[DataIdentifier, NioThrottledInputStream]()
+  val flowToTIS = new ConcurrentHashMap[DataIdentifier, DataClient]()
   // TODO: Currently using flowToBitPerSec inside synchronized blocks. Might consider replacing with
   // an appropriate data structure; e.g., Collections.synchronizedMap.
   val flowToBitPerSec = new ConcurrentHashMap[DataIdentifier, Double]()
@@ -132,7 +134,7 @@ class VarysClient(
             flowToBitPerSec.foreach { kv => {
               // kv (key = FlowId, value = Rate)
               if (flowToTIS.containsKey(kv._1)) 
-                flowToTIS.get(kv._1).setNewRate(kv._2)
+                flowToTIS.get(kv._1).updateRate(kv._2)
               }
             }
           }
@@ -339,7 +341,7 @@ class VarysClient(
 
     val serialObj = serializer.serialize(obj)
 //    handlePut(desc, serialObj)
-    dataServer.putObjectData(desc, serialObj)
+    dataServer.putObjectData(desc.dataId, serialObj)
   }
   
   /**
@@ -411,301 +413,70 @@ class VarysClient(
     handlePutMultiple(descs, coflowId, DataType.FAKE)
   }
 
-  /**
-   * Performs exactly one get operation
-   */
-  @throws(classOf[VarysException])
-  private def getOne(flowDesc: FlowDescription): (FlowDescription, Array[Byte]) = {
-    // file in local file system,read it directly using nio instead of through net
-    if(flowDesc.dataType == DataType.ONDISK && flowDesc.host == this.slaveHost) {
-      val desc = flowDesc.asInstanceOf[FileFlowDescription]
-      logInfo("Data[%s] is in local file system,just read it directly".format(desc.pathToFile))
-      val data = Utils.readFileUseNIO(desc)
-      return (flowDesc, data)
-    }
+  private[this] class FlowListenerWrapper(
+      listener: FlowFetchListener,
+      flows: Map[String, FlowDescription])
+    extends FlowFetchingListener {
 
-    var st = now
-    val channel = SocketChannel.open(new InetSocketAddress(flowDesc.host, flowDesc.port))
-
-    // Don't wait for scheduling for 'SHORT' flows
-    val tisRate = if (flowDesc.sizeInBytes > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
-
-    val tis = new NioThrottledInputStream(channel, clientName, tisRate)
-    flowToTIS.put(flowDesc.dataId, tis)
-
-    val buffer = serializer.serialize(GetRequest(flowDesc))
-    logDebug("Serialized get request object,size is " + buffer.remaining())
-    channel.write(buffer)
-
-    var retVal: Array[Byte] = null
-
-    st = now
-    // Specially handle DataType.FAKE
-    if (flowDesc.dataType == DataType.FAKE) {
-      val buf = new Array[Byte](65536)
-      var bytesReceived = 0L
-      while (bytesReceived < flowDesc.sizeInBytes) {
-        val n = tis.read(buf)
-        // logInfo("Received " + n + " bytes of " + flowDesc.sizeInBytes)
-        if (n == -1) {
-          logError("EOF reached after " + bytesReceived + " bytes")
-          throw new VarysException("Too few bytes received")
-        } else {
-          bytesReceived += n
-        }
-      }
-    } else {
-      retVal = new Array[Byte](flowDesc.sizeInBytes.toInt)
-      val receiveBufferSize = channel.socket().getReceiveBufferSize
-      var length = 0
-      var offset = 0
-      logDebug("Starting to fetch remote data at %s:%d,receive buffer size %s".format(
-        flowDesc.host, flowDesc.port, Utils.bytesToString(receiveBufferSize)))
-
-      val start = System.currentTimeMillis()
-      while(offset < retVal.length) {
-        length = Math.min(retVal.length, offset + receiveBufferSize) - offset
-        offset += tis.read(retVal, offset, length)
-      }
-      val duration = System.currentTimeMillis() - start
-      logInfo("Received remote[%s:%d] data response{size[%s],flow[%s],expected size[%s],duration[%d ms]}"
-        .format(flowDesc.host,
-          flowDesc.port,
-          Utils.bytesToString(length),
-          flowDesc.dataId.dataId,
-          Utils.bytesToString(flowDesc.sizeInBytes),
-          duration))
-      if(offset != flowDesc.sizeInBytes) {
-        throw new VarysException("Data size dose not match,got data size %d,but expected %d"
-          .format(retVal.length, flowDesc.sizeInBytes))
-      }
-    }
-    logTrace("Received " + flowDesc.sizeInBytes + " bytes for " + flowDesc + " in " + (now - st) +
-      " milliseconds")
-
-    // Close everything
-    flowToTIS.remove(flowDesc.dataId)
-    tis.close
-    channel.close
-
-    (flowDesc, retVal)
-  }
-  
-  /**
-   * Notifies the master and the slave. But everything is done in the client
-   * Blocking call.
-   */
-  @throws(classOf[VarysException])
-  private def handleGet(
-      blockId: String, 
-      dataType: DataType.DataType, 
-      coflowId: String): Array[Byte] = {
-    
-    waitForRegistration
-    
-    var st = now
-    
-    // Notify master and retrieve the FlowDescription in response
-    var flowDesc: FlowDescription = null
-
-    val gotFlowDesc = AkkaUtils.askActorWithReply[Option[GotFlowDesc]](masterActor, 
-      GetFlow(blockId, coflowId, clientId, slaveId))
-    gotFlowDesc match {
-      case Some(GotFlowDesc(x)) => flowDesc = x
-      case None => { 
-        val tmpM = "Failed to receive FlowDescription for " + blockId + " of coflow " + coflowId
-        logWarning(tmpM)
-        // TODO: Define proper VarysExceptions
-        throw new VarysException(tmpM)
-      }
-    }
-    logInfo("Received " + flowDesc + " for " + blockId + " of coflow " + coflowId + " in " + 
-      (now - st) + " milliseconds")
-    
-    // Notify local slave
-    AkkaUtils.tellActor(slaveActor, GetFlow(blockId, coflowId, clientId, slaveId, flowDesc))
-    
-    // Get it!
-    val (origFlowDesc, retVal) = getOne(flowDesc)
-    // Notify flow completion
-    masterActor ! FlowProgress(
-      origFlowDesc.id, 
-      origFlowDesc.coflowId, 
-      origFlowDesc.sizeInBytes, 
-      true)
-
-    retVal
-  }
-  
-  /**
-   * Notifies the master and the slave. But everything is done in the client
-   * Blocking call.
-   * FIXME: Handles only DataType.FAKE right now.
-   */
-  @throws(classOf[VarysException])
-  private def handleGetMultiple(
-      blockIds: Array[String], 
-      dataType: DataType.DataType, 
-      coflowId: String) {
-    
-    if (dataType != DataType.FAKE) {
-      val tmpM = "handleGetMultiple currently supports only DataType.FAKE"
-      logWarning(tmpM)
-      throw new VarysException(tmpM)
-    }
-
-    waitForRegistration
-    
-    var st = now
-    
-    // Notify master and retrieve the FlowDescription in response
-    var flowDescs: Array[FlowDescription] = null
-
-    val gotFlowDescs = AkkaUtils.askActorWithReply[Option[GotFlowDescs]](
-      masterActor, 
-      GetFlows(blockIds, coflowId, clientId, slaveId))
-
-    gotFlowDescs match {
-      case Some(GotFlowDescs(x)) => flowDescs = x
-      case None => { 
-        val tmpM = "Failed to receive FlowDescriptions for " + blockIds.size + " flows of coflow " + 
-          coflowId
-        logWarning(tmpM)
-        // TODO: Define proper VarysExceptions
-        throw new VarysException(tmpM)
-      }
-    }
-    logInfo("Received " + flowDescs.size + " flowDescs " + " of coflow " + coflowId + " in " + 
-      (now - st) + " milliseconds")
-    
-    // Notify local slave
-    AkkaUtils.tellActor(slaveActor, GetFlows(blockIds, coflowId, clientId, slaveId, flowDescs))
-    
-    // Get 'em!
-    val recvLock = new Object
-    var recvFinished = 0
-
-    for (flowDesc <- flowDescs) {
-      new Thread("Receive thread for " + flowDesc) {
-        override def run() {
-          val (origFlowDesc, retVal) = getOne(flowDesc)
-          // Notify flow completion
-          masterActor ! FlowProgress(
-            origFlowDesc.id, 
-            origFlowDesc.coflowId, 
-            origFlowDesc.sizeInBytes, 
-            true)
-          
-          recvLock.synchronized {
-            recvFinished += 1
-            recvLock.notifyAll()
-          }
-        }
-      }.start()
-    }
-
-    recvLock.synchronized {
-      while (recvFinished < flowDescs.size) {
-        recvLock.wait()
-      }
-    }
-
-    // val futureList = Future.traverse(flowDescs.toList)(fd => Future(getOne(fd)))
-    // futureList.onComplete {
-    //   case Right(arrayOfFlowDesc_Res) => {
-    //     arrayOfFlowDesc_Res.foreach { x =>
-    //       val (origFlowDesc, res) = x
-    //       masterActor ! FlowProgress(
-    //         origFlowDesc.id, 
-    //         origFlowDesc.coflowId, 
-    //         origFlowDesc.sizeInBytes, 
-    //         true)
-    //     }
-    //   }
-    //   case Left(vex) => throw vex
-    // }
-  }
-
-  /**
-   * Retrieves data from any of the feasible locations. 
-   */
-  @throws(classOf[VarysException])
-  def getObject[T](objectId: String, coflowId: String): T = {
-    val resp = handleGet(objectId, DataType.INMEMORY, coflowId)
-    Utils.deserialize[T](resp)
-  }
-  
-  /**
-   * Gets a file
-   */
-  @throws(classOf[VarysException])
-  def getFile(fileId: String, coflowId: String): Array[Byte] = {
-    handleGet(fileId, DataType.ONDISK, coflowId)
-  }
-
-  private[this] class FlowListenerWrapper(listener: FetchFlowListener) extends FetchFlowListener {
-    override def complete(flowId: String, coflowId: String, data: Array[Byte]): Unit = {
+    override def onFlowFetchSuccess(coflowId: String, flowId: String, buffer: ManagedBuffer): Unit = {
+      val data = buffer.nioByteBuffer()
       masterActor ! FlowProgress(
         flowId,
         coflowId,
-        data.length,
+        buffer.size(),
         true)
-      listener.complete(flowId, coflowId, data)
+      listener.onFlowFetchSuccess(coflowId, flowId, data)
     }
-    override def failure(flowId: String, coflowId: String, length: Long, e: Throwable): Unit = {
+    override def onFlowFetchFailure(coflowId: String, flowId: String, exception: Throwable): Unit = {
+      val length: Long = flows.get(flowId)
+        .map(_.sizeInBytes)
+        .getOrElse {
+        logWarning("flow id dose not exists in requests flows")
+        -1L
+      }
       masterActor ! FlowProgress(
         flowId,
         coflowId,
         length,
         false)
-      listener.failure(flowId, coflowId, length: Long, e)
+      listener.onFlowFetchFailure(flowId, coflowId, length, exception)
     }
   }
 
-  def getFlows(flowIds: Seq[String], coflowId: String, listener: FetchFlowListener) {
+  def getFlows(flowIds: Seq[String], coflowId: String, listener: FlowFetchListener) {
     val descriptions = AkkaUtils.askActorWithReply[Option[GotFlowDescs]](
       masterActor,
       GetFlows(flowIds.toArray, coflowId, clientId, slaveId))
-    if(!descriptions.isDefined) {
-      throw new VarysException(s"flows do not exist in coflow $coflowId!")
-    }
-    val flows = descriptions.get.flowDescs
+    val flows = descriptions.map(_.flowDescs)
+      .getOrElse(throw new VarysException(s"flows do not exist in coflow $coflowId!"))
+
     AkkaUtils.tellActor(slaveActor, GetFlows(flowIds.toArray, coflowId, clientId, slaveId, flows))
     logInfo("Starting fetch remote flows data for coflow " + coflowId)
-    flows.groupBy(flow => flow.host).foreach(pair => {
-      val dataListener = new FlowListenerWrapper(listener)
-      val (host, flows) = pair
-      if(host == this.slaveHost) {
-        flows.foreach(flow => {
-          this.executors.submit(new LocalDataFetcher(flow, dataListener))
-        })
-      } else {
-        var left = flows
-        do {
-          val parts = left.splitAt(MAX_FLOWS_REQUEST)
-          left = parts._2
-          val fetcher = new RemoteDataFetcher(channelPool, parts._1.toSeq, dataListener, this.serializer, this)
-          this.executors.submit(fetcher)
-        } while(left.length > 0)
-      }
-    })
+    val wrappedListener = new FlowListenerWrapper(listener, flows.map(f => (f.id, f)).toMap)
+    flows.groupBy(flow => flow.host).foreach {
+      case (host, flows) =>
+        // data in local file system
+        if(host == this.slaveHost) {
+          flows.foreach(flow => {
+            this.executors.submit(new LocalDataFetcher(flow, wrappedListener))
+          })
+        } else {
+          flows.groupBy(_.port).map(pair => (pair._1, pair._2.map(_.toRequest))).foreach {
+            case  (port, flows) =>
+              val tisRate = if (flows.map(_.size).sum > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
+              dataService.getClient(host, port, tisRate)
+                .fetchData(coflowId, new FlowRequestArray(flows), wrappedListener)
+          }
+        }
+    }
   }
 
-
-  /**
-   * Paired get() for putFake. Doesn't return anything, but emulates the retrieval process.
-   */
-  @throws(classOf[VarysException])
-  def getFake(blockId: String, coflowId: String) {
-    handleGet(blockId, DataType.FAKE, coflowId)
-  }
-  
-  /**
-   * Paired get() for putFakeMultiple. Doesn't return anything, but emulates the retrieval process.
-   */
-  @throws(classOf[VarysException])
-  def getFakeMultiple(blockIds: Array[String], coflowId: String) {
-    handleGetMultiple(blockIds, DataType.FAKE, coflowId)
+  implicit class FlowRequestConverter(desc: FlowDescription) {
+    def toRequest = desc match {
+      case fileFlow: FileFlowDescription =>
+        new FileFlowRequest(desc.id, fileFlow.path, fileFlow.offset, fileFlow.length)
+      case other => new FlowRequest(desc.id, desc.sizeInBytes)
+    }
   }
 
   def deleteFlow(flowId: String, coflowId: String) {

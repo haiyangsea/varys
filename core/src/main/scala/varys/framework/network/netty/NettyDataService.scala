@@ -7,17 +7,16 @@ import varys.framework.network.{DataClient, DataServer, DataService}
  * Created by Allen on 2015/4/13.
  */
 class NettyDataService extends DataService {
-
-  val context = new TransportContext(
-    new TransportConf(new SystemPropertyConfigProvider), new FlowHandler)
+  val conf = new TransportConf(new SystemPropertyConfigProvider)
+  val context = new TransportContext(conf, new FlowHandler(conf))
 
   val server = context.createServer()
   val clientFactory = context.createClientFactory()
 
   override def getServer: DataServer = new NettyDataServer(server)
 
-  override def getClient(host: String, port: Int): DataClient = {
-    val client = clientFactory.createClient(host, port)
-    new NettyDataClient(client)
+  override def getClient(host: String, port: Int, initBitPerSec: Double): DataClient = {
+    val client = clientFactory.createClient(host, port, initBitPerSec)
+    new NettyDataClient(client, conf)
   }
 }

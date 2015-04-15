@@ -33,7 +33,7 @@ public abstract class FlowTransferMessage implements Encodable
       switch (type) {
         case 0: return OpenFlows.decode(buf);
         case 1: return UploadFlows.decode(buf);
-        case 3: return StreamHandle.decode(buf);
+        case 2: return StreamHandle.decode(buf);
         default: throw new IllegalArgumentException("Unknown message type: " + type);
       }
     }

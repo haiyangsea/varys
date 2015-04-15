@@ -361,13 +361,13 @@ private[varys] object BroadcastReceiver extends Logging {
       val blockName = origFileName + "-" + offset
       logInfo("Getting " + blockName + " from coflow " + bInfo.coflowId)
       
-      val bArr = client.getFile(blockName, bInfo.coflowId)
-      logInfo("Got " + blockName + " of " + bArr.length + " bytes. Writing to " + localPathToFile + 
-        " at " + offset)
+//      val bArr = client.getFlows(Seq(blockName), bInfo.coflowId)
+//      logInfo("Got " + blockName + " of " + bArr.length + " bytes. Writing to " + localPathToFile +
+//        " at " + offset)
 
       FILE.synchronized {
         FILE.seek(offset)
-        FILE.write(bArr)
+//        FILE.write(bArr)
       }
     })
 

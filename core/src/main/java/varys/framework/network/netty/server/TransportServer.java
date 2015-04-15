@@ -25,6 +25,7 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
+import varys.framework.network.NoThrottle;
 import varys.framework.network.netty.TransportContext;
 import varys.framework.network.netty.util.IOMode;
 import varys.framework.network.netty.util.NettyUtils;
@@ -108,7 +109,7 @@ public class TransportServer implements Closeable
       @Override
       protected void initChannel(SocketChannel ch) throws Exception
       {
-        context.initializePipeline(ch);
+        context.initializePipeline(ch, new NoThrottle());
       }
     });
 

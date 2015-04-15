@@ -20,6 +20,8 @@ package varys.framework.network.netty;
 import com.google.common.collect.Lists;
 import io.netty.channel.Channel;
 import io.netty.channel.socket.SocketChannel;
+import varys.framework.network.NoThrottle;
+import varys.framework.network.Throttle;
 import varys.framework.network.netty.client.TransportClient;
 import varys.framework.network.netty.client.TransportClientBootstrap;
 import varys.framework.network.netty.client.TransportClientFactory;
@@ -98,13 +100,14 @@ public class TransportContext {
    * be used to communicate on this channel. The TransportClient is directly associated with a
    * ChannelHandler to ensure all users of the same channel get the same TransportClient object.
    */
-  public TransportChannelHandler initializePipeline(SocketChannel channel) {
+  public TransportChannelHandler initializePipeline(SocketChannel channel, Throttle throttle) {
     try {
-      TransportChannelHandler channelHandler = createChannelHandler(channel);
+      TransportChannelHandler channelHandler = createChannelHandler(channel, throttle);
       channel.pipeline()
         .addLast("encoder", encoder)
         .addLast("frameDecoder", NettyUtils.createFrameDecoder())
         .addLast("decoder", decoder)
+        .addLast("throttle", throttle)
         // NOTE: Chunks are currently guaranteed to be returned in the order of request, but this
         // would require more logic to guarantee if this were not part of the same event loop.
         .addLast("handler", channelHandler);
@@ -120,9 +123,9 @@ public class TransportContext {
    * ResponseMessages. The channel is expected to have been successfully created, though certain
    * properties (such as the remoteAddress()) may not be available yet.
    */
-  private TransportChannelHandler createChannelHandler(Channel channel) {
+  private TransportChannelHandler createChannelHandler(Channel channel, Throttle throttle) {
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);
-    TransportClient client = new TransportClient(channel, responseHandler);
+    TransportClient client = new TransportClient(channel, responseHandler, throttle);
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler);
     return new TransportChannelHandler(client, responseHandler, requestHandler);

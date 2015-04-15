@@ -24,6 +24,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelFutureListener;
+import varys.framework.network.Throttle;
 import varys.framework.network.netty.protocol.ChunkFetchRequest;
 import varys.framework.network.netty.protocol.RpcRequest;
 import varys.framework.network.netty.protocol.StreamChunkId;
@@ -70,9 +71,12 @@ public class TransportClient implements Closeable
   private final Channel channel;
   private final TransportResponseHandler handler;
 
-  public TransportClient(Channel channel, TransportResponseHandler handler) {
+  public final Throttle throttle;
+
+  public TransportClient(Channel channel, TransportResponseHandler handler, Throttle throttle) {
     this.channel = Preconditions.checkNotNull(channel);
     this.handler = Preconditions.checkNotNull(handler);
+    this.throttle = throttle;
   }
 
   public boolean isActive() {

@@ -6,7 +6,7 @@ trait DataService {
 
   def getServer: DataServer
 
-  def getClient(host: String, port: Int): DataClient
+  def getClient(host: String, port: Int, initBitPerSec: Double): DataClient
 }
 
 object DataService {
@@ -14,7 +14,8 @@ object DataService {
   private[this] val rm = ru.runtimeMirror(getClass.getClassLoader)
 
   def getDataService: DataService = {
-    val handlerClassName = System.getProperty("varys.data.service")
+    val handlerClassName = System.getProperty("varys.data.service",
+      "varys.framework.network.netty.NettyDataService")
     try {
       Try(reflectObject(handlerClassName).asInstanceOf[DataService])
         .getOrElse(reflectClass(handlerClassName).asInstanceOf[DataService])
@@ -24,12 +25,12 @@ object DataService {
     }
   }
 
-  def reflectObject(fullClassName: String): Any = {
+  private[this] def reflectObject(fullClassName: String): Any = {
     val module = rm.staticModule(fullClassName)
     rm.reflectModule(module).instance
   }
 
-  def reflectClass(fullClassName: String): Any = {
+  private[this] def reflectClass(fullClassName: String): Any = {
     val cs = rm.staticClass(fullClassName)
     val cons = cs.typeSignature.declaration(ru.nme.CONSTRUCTOR).asMethod
     val cm = rm.reflectClass(cs)
