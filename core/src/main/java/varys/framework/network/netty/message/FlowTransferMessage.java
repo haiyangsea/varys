@@ -10,21 +10,7 @@ import varys.framework.network.netty.protocol.StreamHandle;
  */
 public abstract class FlowTransferMessage implements Encodable
 {
-  protected abstract Type type();
-
-  public static enum Type {
-    OPEN_FLOWS(0), UPLOAD_FLOWS(1), STREAM_HANDLE(2);
-
-    private final byte id;
-
-    private Type(int id) {
-      assert id < 128 : "Cannot have more than 128 message types";
-      this.id = (byte)id;
-    }
-
-    public byte id() {return id;}
-  }
-
+  protected abstract FlowKind type();
 
   public static class Decoder {
     public static FlowTransferMessage fromByteArray(byte[] msg) {
@@ -42,7 +28,7 @@ public abstract class FlowTransferMessage implements Encodable
   public byte[] toByteArray() {
     // Allow room for encoded message, plus the type byte
     ByteBuf buf = Unpooled.buffer(encodedLength() + 1);
-    buf.writeByte(type().id);
+    buf.writeByte(type().id());
     encode(buf);
     assert buf.writableBytes() == 0 : "Writable bytes remain: " + buf.writableBytes();
     return buf.array();

@@ -34,7 +34,7 @@ public class UploadFlows extends FlowTransferMessage
   }
 
   @Override
-  protected Type type() { return Type.UPLOAD_FLOWS; }
+  protected FlowKind type() { return FlowKind.UPLOAD_FLOWS; }
 
   @Override
   public int hashCode() {

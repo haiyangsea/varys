@@ -2,6 +2,7 @@ package varys.framework.network.netty.protocol;
 
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
+import varys.framework.network.netty.message.FlowKind;
 import varys.framework.network.netty.message.FlowTransferMessage;
 
 /**
@@ -18,7 +19,7 @@ public class StreamHandle extends FlowTransferMessage
   }
 
   @Override
-  protected Type type() { return Type.STREAM_HANDLE; }
+  protected FlowKind type() { return FlowKind.STREAM_HANDLE; }
 
   @Override
   public int hashCode() {

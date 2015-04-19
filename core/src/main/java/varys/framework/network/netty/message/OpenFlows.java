@@ -21,7 +21,7 @@ public class OpenFlows extends FlowTransferMessage
   }
 
   @Override
-  protected Type type() { return Type.OPEN_FLOWS; }
+  protected FlowKind type() { return FlowKind.OPEN_FLOWS; }
 
   @Override
   public int encodedLength() {
