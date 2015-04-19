@@ -1,5 +1,7 @@
 package varys.framework.network
 
+import varys.VarysException
+
 import scala.util.Try
 
 trait DataService {
@@ -21,7 +23,7 @@ object DataService {
         .getOrElse(reflectClass(handlerClassName).asInstanceOf[DataService])
     } catch {
       case e: Throwable =>
-        sys.error(s"Failed to build class $handlerClassName as a DataService")
+        throw new VarysException(s"Failed to build class $handlerClassName as a DataService", e)
     }
   }
 

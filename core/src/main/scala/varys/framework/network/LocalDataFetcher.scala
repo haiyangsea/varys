@@ -1,8 +1,11 @@
 package varys.framework.network
 
-import varys.framework.network.netty.buffer.NioManagedBuffer
+import java.io.File
+
+import varys.framework.network.netty.NettyDataService
+import varys.framework.network.netty.buffer.FileSegmentManagedBuffer
 import varys.framework.{FileFlowDescription, FlowDescription}
-import varys.{Logging, Utils}
+import varys.Logging
 
 /**
  * Created by hWX221863 on 2014/10/14.
@@ -13,9 +16,14 @@ class LocalDataFetcher(
   extends Runnable with Logging{
 
   override def run(): Unit = {
-    val desc = flow.asInstanceOf[FileFlowDescription]
-    logDebug("Data[%s] is in local file system,just read it directly".format(desc.path))
-    val data = Utils.readFileUseNIO(desc)
-    listener.onFlowFetchSuccess(flow.id, flow.coflowId, new NioManagedBuffer(data))
+    try {
+      val desc = flow.asInstanceOf[FileFlowDescription]
+      logDebug("Data[%s] is in local file system,just read it directly".format(desc.path))
+      val data = new FileSegmentManagedBuffer(NettyDataService.conf,
+        new File(desc.path), desc.offset, desc.length)
+      listener.onFlowFetchSuccess(flow.coflowId, flow.id, data)
+    } catch {
+      case e: Throwable => listener.onFlowFetchFailure(flow.coflowId, flow.id, e)
+    }
   }
 }

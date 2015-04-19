@@ -5,4 +5,11 @@ package varys
  */
 class VarysConf {
 
+  def get(name: String, default: String): String = {
+    System.getProperty(name, default)
+  }
+
+  def getInt(name: String, default: Int): Int = {
+    get(name, default.toString).toInt
+  }
 }

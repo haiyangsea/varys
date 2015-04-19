@@ -12,7 +12,6 @@ public class RateThrottle extends Throttle
 {
   private final Logger logger = LoggerFactory.getLogger(Throttle.class);
 
-  private long bytesRead = 0;
   private long maxBytesPerSec;
   private long totalSleepTime;
 
@@ -25,10 +24,7 @@ public class RateThrottle extends Throttle
     maxBytesPerSec = (long)(initBitPerSec / 8);
   }
 
-  public void addReadBytes(int size) {
-    this.bytesRead += size;
-  }
-
+  @Override
   public void throttle() {
     try {
       while (maxBytesPerSec <= 0.0) {
@@ -64,10 +60,10 @@ public class RateThrottle extends Throttle
     long elapsed = (System.currentTimeMillis() - startTime) / 1000;
     if (elapsed == 0)
     {
-      return bytesRead;
+      return getReadBytes();
     } else
     {
-      return bytesRead / elapsed;
+      return getReadBytes() / elapsed;
     }
   }
 }

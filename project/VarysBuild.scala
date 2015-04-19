@@ -7,11 +7,11 @@ import com.github.bigtoast.sbtthrift.ThriftPlugin
 import Classpaths.managedJars
 
 object VarysBuild extends Build {
-  lazy val root = Project("root", file("."), settings = rootSettings) aggregate(core)
+  lazy val root = Project("root", file("."), settings = rootSettings) aggregate(core, examples)
 
   lazy val core = Project("core", file("core"), settings = coreSettings)
 
-//  lazy val examples = Project("examples", file("examples"), settings = examplesSettings) dependsOn (core)
+  lazy val examples = Project("examples", file("examples"), settings = examplesSettings) dependsOn (core)
 
   lazy val jarsToExtract = TaskKey[Seq[File]]("jars-to-extract", "JAR files to be extracted")
 
@@ -39,6 +39,7 @@ object VarysBuild extends Build {
   val jettyVersion = "8.1.14.v20131031"
   val slf4jVersion = "1.7.5"
   val sigarVersion = "1.6.4"
+  val akkaVersion = "2.2.3"
 
   val excludeNetty = ExclusionRule(organization = "org.jboss.netty")
 
@@ -57,14 +58,14 @@ object VarysBuild extends Build {
       "org.slf4j" % "slf4j-api" % slf4jVersion,
       "org.slf4j" % "slf4j-log4j12" % slf4jVersion,
       "com.google.protobuf" % "protobuf-java" % "2.4.1",
-      "com.typesafe.akka" %% "akka-actor" % "2.2.3" excludeAll(excludeNetty),
-      "com.typesafe.akka" %% "akka-remote" % "2.2.3" excludeAll(excludeNetty),
-      "com.typesafe.akka" %% "akka-slf4j" % "2.2.3" excludeAll(excludeNetty),
+      "com.typesafe.akka" %% "akka-actor" % akkaVersion excludeAll(excludeNetty),
+      "com.typesafe.akka" %% "akka-remote" % akkaVersion excludeAll(excludeNetty),
+      "com.typesafe.akka" %% "akka-slf4j" % akkaVersion excludeAll(excludeNetty),
       "net.liftweb" % "lift-json_2.9.2" % "2.5",
       "org.apache.thrift" % "libthrift" % "0.8.0",
       "io.netty" % "netty-all" % "4.0.23.Final",
       "org.fusesource" % "sigar" % sigarVersion classifier "" classifier "native",
-      "com.esotericsoftware.kryo" % "kryo" % "2.19",
+//      "com.esotericsoftware.kryo" % "kryo" % "2.19",
       "javax.servlet" % "javax.servlet-api" % "3.0.1",
       "org.scalatest" %% "scalatest" % "2.1.5" % "test",
       "org.scala-lang" % "scala-reflect" % "2.10.4"

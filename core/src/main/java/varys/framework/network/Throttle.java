@@ -23,7 +23,7 @@ public abstract class Throttle extends SimpleChannelInboundHandler<Message>
 
   private long bytesRead = 0;
 
-  protected void addReadBytes(int size) {
+  private void addReadBytes(int size) {
     this.bytesRead += size;
   }
 

@@ -205,6 +205,7 @@ private object Utils extends Logging {
     } finally {
       fileChannel.close()
     }
+    buffer.flip()
     buffer
   }
 

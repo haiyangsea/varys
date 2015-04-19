@@ -6,7 +6,7 @@ import varys.framework.network.{DataClient, DataServer, DataService}
 /**
  * Created by Allen on 2015/4/13.
  */
-class NettyDataService extends DataService {
+object NettyDataService extends DataService {
   val conf = new TransportConf(new SystemPropertyConfigProvider)
   val context = new TransportContext(conf, new FlowHandler(conf))
 

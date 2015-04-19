@@ -35,7 +35,7 @@ private[varys] object ReceiverClientFile {
     Thread.sleep(5000)
     
     println("Trying to retrieve " + FILE_NAME)
-    client.getFile(FILE_NAME, coflowId)
+//    client.getFile(FILE_NAME, coflowId)
     println("Got " + FILE_NAME + ". Now waiting to die.")
     
     client.awaitTermination()

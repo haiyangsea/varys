@@ -38,6 +38,7 @@ class VarysClient(
   val RATE_UPDATE_FREQ = System.getProperty("varys.client.rateUpdateIntervalMillis", "100").toLong
   val SHORT_FLOW_BYTES = System.getProperty("varys.client.shortFlowMB", "0").toLong * 1048576
   val NIC_BPS = 1024 * 1048576
+  val checkLocality = System.getProperty("varys.client.data.locality", "true").toBoolean
 
   val MAX_FLOWS_REQUEST = System.getProperty("vayrs.client.request.flows.max", "1").toInt
 
@@ -55,9 +56,10 @@ class VarysClient(
 
   val dataService  = DataService.getDataService
 
-  // ExecutionContext for Futures
-  implicit val futureExecContext = ExecutionContext.fromExecutor(Utils.newDaemonCachedThreadPool())
   val executors = Executors.newCachedThreadPool()
+  // ExecutionContext for Futures
+  implicit val futureExecContext = ExecutionContext.fromExecutor(executors)
+
 
   var regStartTime = 0L
 
@@ -75,7 +77,7 @@ class VarysClient(
   var slaveHost: String = null
   var clientPort = dataServer.port
 
-  val serializer: Serializer = Utils.getSerializer
+  val serializer: Serializer = Serializer.getSerializer
 
   class ClientActor extends Actor with Logging {
     var masterAddress: Address = null
@@ -131,9 +133,10 @@ class VarysClient(
         // Thread to periodically uodate the rates of all existing ThrottledInputStreams
         context.system.scheduler.schedule(0 millis, RATE_UPDATE_FREQ millis) {
           flowToBitPerSec.synchronized {
+            logDebug("Starting to change flow bit per second.")
             flowToBitPerSec.foreach { kv => {
               // kv (key = FlowId, value = Rate)
-              if (flowToTIS.containsKey(kv._1)) 
+              if (flowToTIS.containsKey(kv._1))
                 flowToTIS.get(kv._1).updateRate(kv._2)
               }
             }
@@ -444,6 +447,8 @@ class VarysClient(
   }
 
   def getFlows(flowIds: Seq[String], coflowId: String, listener: FlowFetchListener) {
+    waitForRegistration
+
     val descriptions = AkkaUtils.askActorWithReply[Option[GotFlowDescs]](
       masterActor,
       GetFlows(flowIds.toArray, coflowId, clientId, slaveId))
@@ -451,21 +456,25 @@ class VarysClient(
       .getOrElse(throw new VarysException(s"flows do not exist in coflow $coflowId!"))
 
     AkkaUtils.tellActor(slaveActor, GetFlows(flowIds.toArray, coflowId, clientId, slaveId, flows))
-    logInfo("Starting fetch remote flows data for coflow " + coflowId)
+
     val wrappedListener = new FlowListenerWrapper(listener, flows.map(f => (f.id, f)).toMap)
     flows.groupBy(flow => flow.host).foreach {
-      case (host, flows) =>
+      case (host, subFlows) =>
         // data in local file system
-        if(host == this.slaveHost) {
-          flows.foreach(flow => {
+        if (host == this.slaveHost && checkLocality) {
+          logInfo("Starting fetch remote flows data for coflow " + coflowId)
+          subFlows.foreach(flow => {
             this.executors.submit(new LocalDataFetcher(flow, wrappedListener))
           })
         } else {
+          logInfo("Starting fetch remote flows data for coflow " + coflowId)
           flows.groupBy(_.port).map(pair => (pair._1, pair._2.map(_.toRequest))).foreach {
-            case  (port, flows) =>
-              val tisRate = if (flows.map(_.size).sum > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
-              dataService.getClient(host, port, tisRate)
-                .fetchData(coflowId, new FlowRequestArray(flows), wrappedListener)
+            case (port, remoteFlows) =>
+              val tisRate = if (remoteFlows.map(_.size).sum > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
+              val client = dataService.getClient(host, port, tisRate)
+              remoteFlows.foreach(flow =>
+                this.flowToTIS.put(DataIdentifier(flow.flowId, coflowId), client))
+              client.fetchData(coflowId, new FlowRequestArray(remoteFlows), wrappedListener)
           }
         }
     }

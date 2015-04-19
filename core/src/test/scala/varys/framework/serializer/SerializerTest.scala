@@ -1,11 +1,12 @@
 package varys.framework.serializer
 
 import org.scalatest.FunSuite
+import varys.Logging
 
 /**
  * Created by hWX221863 on 2015/4/15.
  */
-class SerializerTest extends FunSuite {
+class SerializerTest extends FunSuite with Logging {
 
   test("serializer") {
     val serializer = Serializer.getSerializer

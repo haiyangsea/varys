@@ -160,7 +160,7 @@ private[varys] class SlaveActor(
 
       // Update commPort if the end point will be a client
       val newDesc = if (flowDesc.dataType != DataType.INMEMORY) {
-        flowDesc.copy(host = dataServer.host, port = dataServer.port)
+        copyFlowWithAddress(flowDesc, dataServer.host, dataServer.port)
       } else {
         flowDesc
       }
@@ -176,7 +176,7 @@ private[varys] class SlaveActor(
 
       // Update commPort if the end point will be a client
       val newFlowDescs = if (dataType != DataType.INMEMORY) {
-        flowDescs.map(_.copy(host = dataServer.host, port = dataServer.port))
+        flowDescs.map(copyFlowWithAddress(_, dataServer.host, dataServer.port))
       } else {
         flowDescs
       }
@@ -206,6 +206,15 @@ private[varys] class SlaveActor(
     }
   }
 
+  def copyFlowWithAddress(flow: FlowDescription, host: String, port: Int): FlowDescription = {
+    flow match {
+      case f: FileFlowDescription =>
+        new FileFlowDescription(f.id, f.path, f.coflowId, f.dataType,
+          f.offset, f.length, f.maxR, host, port)
+
+      case _ => flow.copy(host = host, port = port)
+    }
+  }
   def masterDisconnected() {
     // TODO: It would be nice to try to reconnect to the master, but just shut down for now.
     // (Note that if reconnecting we would also need to assign IDs differently.)
