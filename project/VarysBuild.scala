@@ -61,8 +61,8 @@ object VarysBuild extends Build {
       "io.netty" % "netty-all" % "4.0.23.Final",
       "org.fusesource" % "sigar" % sigarVersion classifier "" classifier "native",
       "com.esotericsoftware.kryo" % "kryo" % "2.19",
-      "javax.servlet" % "javax.servlet-api" % "3.0.1",
-      "com.github.romix.akka" % "akka-kryo-serialization_2.10" % "0.3.1"
+      "javax.servlet" % "javax.servlet-api" % "3.0.1"
+//      "com.github.romix.akka" % "akka-kryo-serialization_2.10" % "0.3.1"
     ),
     
     // Collect jar files to be extracted from managed jar dependencies

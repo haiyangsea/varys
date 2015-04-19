@@ -28,130 +28,31 @@ private[varys] object AkkaUtils {
     val akkaThreads = System.getProperty("varys.akka.threads", "4").toInt
     val akkaBatchSize = System.getProperty("varys.akka.batchSize", "15").toInt
     val akkaTimeout = System.getProperty("varys.akka.timeout", "60").toInt
-    val akkaFrameSize = System.getProperty("varys.akka.frameSize", "10").toInt * 1048576
+    val akkaFrameSize = System.getProperty("varys.akka.frameSize", "10").toInt * 1024 * 1024
     val logLevel = System.getProperty("varys.akka.logLevel", "ERROR")
     val lifecycleEvents = if (System.getProperty("varys.akka.logLifecycleEvents", "false").toBoolean) "on" else "off"
-    val logRemoteEvents = if (System.getProperty("varys.akka.logRemoteEvents", "false").toBoolean) "on" else "off"
-    val akkaWriteTimeout = System.getProperty("varys.akka.writeTimeout", "30").toInt
+    //    val logRemoteEvents = if (System.getProperty("varys.akka.logRemoteEvents", "false").toBoolean) "on" else "off"
+    //    val akkaWriteTimeout = System.getProperty("varys.akka.writeTimeout", "30").toInt
 
-    val akkaConf = ConfigFactory.parseString("""
-      akka {
-        daemonic = on
-        jvm-exit-on-fatal-error = off
-        loggers = ["akka.event.slf4j.Slf4jLogger"]
-        extensions = ["com.romix.akka.serialization.kryo.KryoSerializationExtension$"]
-
-        actor {
-          debug {
-            # receive = on
-            # autoreceive = on
-            # lifecycle = on
-            # fsm = on
-            # event-stream = on
-          }
-         
-          provider = "akka.remote.RemoteActorRefProvider"
-
-          serializers {  
-            java = "akka.serialization.JavaSerializer"
-            kryo = "com.romix.akka.serialization.kryo.KryoSerializer"
-          }
-
-          serialization-bindings {
-            "varys.framework.FrameworkMessage" = kryo
-            "java.io.Serializable" = java
-          }
-
-          # Details of configuration params is at https://github.com/romix/akka-kryo-serialization
-          kryo {
-            type = "graph"  
-            idstrategy = "incremental"  
-
-            # Define a default size for serializer pool
-            # Try to define the size to be at least as big as the max possible number
-            # of threads that may be used for serialization, i.e. max number
-            # of threads allowed for the scheduler
-            serializer-pool-size = 32
-
-            # Define a default size for byte buffers used during serialization
-            buffer-size = 65536  
-
-            use-manifests = false
-            implicit-registration-logging = false 
-            kryo-trace = false
-
-            classes = [
-              "varys.framework.RegisterSlave",  
-              "varys.framework.Heartbeat",
-              "varys.framework.RegisteredSlave",
-              "varys.framework.RegisterSlaveFailed",
-              "varys.framework.RegisterClient",
-              "varys.framework.RegisterCoflow",
-              "varys.framework.RegisterCoflowFailed",
-              "varys.framework.RejectedCoflow",
-              "varys.framework.UnregisterCoflow",
-              "varys.framework.RequestBestRxMachines",
-              "varys.framework.RequestBestTxMachines",
-              "varys.framework.RegisteredClient",
-              "varys.framework.CoflowKilled",
-              "varys.framework.RegisterClientFailed",
-              "varys.framework.RegisteredCoflow",
-              "varys.framework.UnregisteredCoflow",
-              "varys.framework.BestRxMachines",
-              "varys.framework.BestTxMachines",
-              "varys.framework.UpdatedRates",
-              "varys.framework.AddFlow",
-              "varys.framework.AddFlows",
-              "varys.framework.GetFlow",
-              "varys.framework.GetFlows",
-              "varys.framework.FlowProgress",
-              "varys.framework.DeleteFlow",
-              "varys.framework.GotFlowDesc",
-              "varys.framework.GotFlowDescs",
-              "varys.framework.CoflowDescription",
-              "varys.framework.CoflowType$",
-              "varys.framework.FlowDescription",
-              "varys.framework.FileDescription",
-              "varys.framework.ObjectDescription",
-              "varys.framework.DataIdentifier",
-              "varys.framework.DataType$",
-              "scala.collection.immutable.Map$Map1",
-              "scala.collection.immutable.Map$Map2",
-              "scala.collection.immutable.Map$Map3",
-              "scala.collection.immutable.Map$Map4",
-              "scala.collection.immutable.HashMap$HashTrieMap"
-            ]  
-          }
-        }
-      }
-
-      akka.loglevel = "%s"
-      akka.stdout-loglevel = "%s"
-      akka.remote.netty.tcp.transport-class = "akka.remote.transport.netty.NettyTransport"
-      akka.remote.netty.tcp.hostname = "%s"
-      akka.remote.netty.tcp.port = %d
-      akka.remote.netty.tcp.tcp-nodelay = on
-      akka.remote.netty.tcp.connection-timeout = %ds
-      akka.remote.netty.tcp.maximum-frame-size = %dB
-      akka.remote.netty.tcp.execution-pool-size = %d
-      akka.actor.default-dispatcher.throughput = %d
-      akka.remote.log-remote-lifecycle-events = %s
-      akka.remote.log-sent-messages = %s
-      akka.remote.log-received-messages = %s
-      akka.remote.netty.write-timeout = %ds
-      """.format(
-        logLevel, 
-        logLevel, 
-        host, 
-        port, 
-        akkaTimeout, 
-        akkaFrameSize, 
-        akkaThreads, 
-        akkaBatchSize,
-        lifecycleEvents, 
-        logRemoteEvents, 
-        logRemoteEvents, 
-        akkaWriteTimeout))
+    val akkaConf = ConfigFactory.parseString(
+      s"""
+      |akka.daemonic = on
+      |akka.loggers = [""akka.event.slf4j.Slf4jLogger""]
+      |akka.stdout-loglevel = $logLevel
+      |akka.jvm-exit-on-fatal-error = off
+      |akka.actor.provider = "akka.remote.RemoteActorRefProvider"
+      |akka.remote.netty.tcp.transport-class = "akka.remote.transport.netty.NettyTransport"
+      |akka.remote.netty.tcp.hostname = "$host"
+      |akka.remote.netty.tcp.port = $port
+      |akka.remote.netty.tcp.tcp-nodelay = on
+      |akka.remote.netty.tcp.connection-timeout = $akkaTimeout s
+      |akka.remote.netty.tcp.maximum-frame-size = ${akkaFrameSize}B
+      |akka.remote.netty.tcp.execution-pool-size = $akkaThreads
+      |akka.actor.default-dispatcher.throughput = $akkaBatchSize
+      |akka.remote.log-remote-lifecycle-events = $lifecycleEvents
+      |akka.log-dead-letters = $lifecycleEvents
+      |akka.log-dead-letters-during-shutdown = $lifecycleEvents
+      """.stripMargin)
 
     val actorSystem = ActorSystem(name, akkaConf)
 
