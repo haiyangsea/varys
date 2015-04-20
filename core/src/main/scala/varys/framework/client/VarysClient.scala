@@ -468,7 +468,7 @@ class VarysClient(
           })
         } else {
           logInfo("Starting fetch remote flows data for coflow " + coflowId)
-          flows.groupBy(_.port).map(pair => (pair._1, pair._2.map(_.toRequest))).foreach {
+          subFlows.groupBy(_.port).map(pair => (pair._1, pair._2.map(_.toRequest))).foreach {
             case (port, remoteFlows) =>
               val tisRate = if (remoteFlows.map(_.size).sum > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
               val client = dataService.getClient(host, port, tisRate)
