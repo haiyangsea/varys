@@ -116,7 +116,7 @@ private[varys] class CoflowInfo(
       rBytes(dst) = v * 8.0 / rBpsFree(dst)
     }
 
-    math.max(sBytes.values.max, rBytes.values.max) * 1000
+    math.max(getMaxValue(sBytes.values), getMaxValue(rBytes.values)) * 1000
   }
 
   /**
@@ -126,15 +126,22 @@ private[varys] class CoflowInfo(
     val sBytes = new HashMap[String, Double]().withDefaultValue(0.0)
     val rBytes = new HashMap[String, Double]().withDefaultValue(0.0)
 
-    getFlows.foreach { flowInfo =>
+    val flows = getFlows
+    println("getted flows : " + flows + ", id to flows : " + idToFlow.values())
+    flows.foreach { flowInfo =>
       // FIXME: Assuming a single source and destination for each flow
       val src = flowInfo.source
       val dst = flowInfo.destClient.host
-      
+      println("haddle flow info : " + flowInfo)
       sBytes(src) = sBytes(src) + flowInfo.bytesLeft
       rBytes(dst) = rBytes(dst) + flowInfo.bytesLeft
     }
-    math.max(sBytes.values.max, rBytes.values.max)
+    println("completed calc====")
+    math.max(getMaxValue(sBytes.values), getMaxValue(rBytes.values))
+  }
+
+  private def getMaxValue(values: Iterable[Double]): Double = {
+    if (values.isEmpty) 0.0 else values.max
   }
 
   def addFlow(flowDesc: FlowDescription) {
@@ -164,7 +171,9 @@ private[varys] class CoflowInfo(
    */
   private def postProcessIfReady(): Boolean = {
     if (numRegisteredFlows.get == desc.maxFlows) {
+      println("=====starting calc alpha=====")
       origAlpha = calcAlpha()
+      println("=====end calc alpha=====")
       changeState(CoflowState.READY)
       readyTime = System.currentTimeMillis
       true

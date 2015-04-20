@@ -9,7 +9,7 @@ import varys.util.IntParam
 private[varys] class MasterArguments(
   args: Array[String]) {
   
-  var ip = Utils.localHostName()
+  var ip = Utils.localIpAddress
   var port = 1606
   var webUiPort = 16016
   

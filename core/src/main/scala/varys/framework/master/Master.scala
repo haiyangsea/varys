@@ -349,7 +349,7 @@ private[varys] class Master(
         case Some(flowInfos) => {
           val st = now
           canSchedule = coflow.addDestinations(flowIds, client)
-
+          logTrace(s"Added destinations to coflow $coflow, actor is $actor")
           // TODO: Always returning the default source. 
           // Consider selecting based on traffic etc.
           actor ! Some(GotFlowDescs(flowInfos.map(_.desc)))
@@ -359,7 +359,7 @@ private[varys] class Master(
             " milliseconds")
         }
         case None => {
-          // logWarning("Couldn't find flow " + flowId + " of coflow " + coflowId)
+          logWarning(s"Couldn't find flows ${flowIds.mkString("[", ",", "]")} of coflow $coflowId")
           actor ! None
         }
       }
