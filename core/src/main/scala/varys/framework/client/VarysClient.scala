@@ -60,7 +60,7 @@ class VarysClient(
   var dataServer = new DataServer(0, serverThreadName, flowToObject)
   dataServer.start()
 
-  var clientHost = Utils.localHostName()
+  var clientHost = Utils.localIpAddress
   var clientCommPort = dataServer.getCommPort
 
   class ClientActor extends Actor with Logging {
