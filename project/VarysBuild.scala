@@ -21,7 +21,7 @@ object VarysBuild extends Build {
 
   def sharedSettings = Defaults.defaultSettings ++ Seq(
     organization := "net.varys",
-    version := "0.3.0-SNAPSHOT",
+    version := "0.2.0-SNAPSHOT",
     scalaVersion := "2.10.4",
     scalacOptions := Seq("-deprecation", "-unchecked", "-optimize"),
     unmanagedJars in Compile <<= baseDirectory map { base => (base / "lib" ** "*.jar").classpath },
