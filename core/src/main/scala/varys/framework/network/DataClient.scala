@@ -12,6 +12,8 @@ trait DataClient {
   def fetchData(coflowId: String, requests: FlowRequestArray, listener: FlowFetchingListener)
 
   def updateRate(rate: Double): Unit
+  
+  def sleepTime: Long
 
   def close(): Unit
 }

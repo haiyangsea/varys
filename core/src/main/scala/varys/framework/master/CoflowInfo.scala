@@ -127,16 +127,13 @@ private[varys] class CoflowInfo(
     val rBytes = new HashMap[String, Double]().withDefaultValue(0.0)
 
     val flows = getFlows
-    println("getted flows : " + flows + ", id to flows : " + idToFlow.values())
     flows.foreach { flowInfo =>
       // FIXME: Assuming a single source and destination for each flow
       val src = flowInfo.source
       val dst = flowInfo.destClient.host
-      println("haddle flow info : " + flowInfo)
       sBytes(src) = sBytes(src) + flowInfo.bytesLeft
       rBytes(dst) = rBytes(dst) + flowInfo.bytesLeft
     }
-    println("completed calc====")
     math.max(getMaxValue(sBytes.values), getMaxValue(rBytes.values))
   }
 
@@ -171,9 +168,7 @@ private[varys] class CoflowInfo(
    */
   private def postProcessIfReady(): Boolean = {
     if (numRegisteredFlows.get == desc.maxFlows) {
-      println("=====starting calc alpha=====")
       origAlpha = calcAlpha()
-      println("=====end calc alpha=====")
       changeState(CoflowState.READY)
       readyTime = System.currentTimeMillis
       true

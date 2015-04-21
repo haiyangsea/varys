@@ -42,4 +42,6 @@ public abstract class Throttle extends SimpleChannelInboundHandler<Message>
   public abstract void throttle();
 
   public abstract void updateRate(double newRate);
+
+  public abstract long getTotalSleepTime();
 }

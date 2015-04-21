@@ -101,6 +101,7 @@ public class TransportContext {
    * ChannelHandler to ensure all users of the same channel get the same TransportClient object.
    */
   public TransportChannelHandler initializePipeline(SocketChannel channel, Throttle throttle) {
+    logger.debug("Initialize pipeline use throttle : " + throttle.getClass().getCanonicalName());
     try {
       TransportChannelHandler channelHandler = createChannelHandler(channel, throttle);
       channel.pipeline()

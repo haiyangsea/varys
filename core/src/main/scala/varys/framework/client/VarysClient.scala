@@ -179,12 +179,12 @@ class VarysClient(
         // Close ongoing streams, if any. This will raise exceptions in getOne() 
         // and go back to the application.
         // TODO: Find a more elegant solution.
-        flowToTIS.foreach { kv => {
-          // kv (key = dataId, value = TIS)
-          if (kv._1.coflowId == coflowId)
-            kv._2.close()
-          }
-        }
+//        flowToTIS.foreach { kv => {
+//          // kv (key = dataId, value = TIS)
+//          if (kv._1.coflowId == coflowId)
+//            kv._2.close()
+//          }
+//        }
 
         // Free local resources
         freeLocalResources(coflowId)
@@ -269,6 +269,15 @@ class VarysClient(
   }
 
   private def freeLocalResources(coflowId: String) {
+    flowToTIS.foreach {
+      case (id, client) if id.coflowId == coflowId =>
+        logDebug(s"Finished coflow $coflowId, close the client, " +
+          s"total sleep time: ${client.sleepTime}.")
+
+        client.close()
+      case _ =>
+    }
+
     flowToTIS.retain((dataId, _) => dataId.coflowId != coflowId)
     flowToBitPerSec.synchronized { 
       flowToBitPerSec.retain((dataId, _) => dataId.coflowId != coflowId) 
@@ -462,18 +471,20 @@ class VarysClient(
       case (host, subFlows) =>
         // data in local file system
         if (host == this.slaveHost && checkLocality) {
-          logInfo("Starting fetch remote flows data for coflow " + coflowId)
+          logInfo("Starting fetch remote flows data for coflow " +
+            coflowId + ", flows : " + subFlows.mkString("[", ",", "]"))
           subFlows.foreach(flow => {
             this.executors.submit(new LocalDataFetcher(flow, wrappedListener))
           })
         } else {
-          logInfo("Starting fetch remote flows data for coflow " + coflowId)
+          logInfo("Starting fetch remote flows data for coflow " + coflowId
+            + ", flows : " + subFlows.mkString("[", ",", "]"))
           subFlows.groupBy(_.port).map(pair => (pair._1, pair._2.map(_.toRequest))).foreach {
             case (port, remoteFlows) =>
               val tisRate = if (remoteFlows.map(_.size).sum > SHORT_FLOW_BYTES) 0.0 else NIC_BPS
               val client = dataService.getClient(host, port, tisRate)
-              remoteFlows.foreach(flow =>
-                this.flowToTIS.put(DataIdentifier(flow.flowId, coflowId), client))
+              // TODO : figure out the right tis
+              this.flowToTIS.put(DataIdentifier(remoteFlows.head.flowId, coflowId), client)
               client.fetchData(coflowId, new FlowRequestArray(remoteFlows), wrappedListener)
           }
         }

@@ -16,4 +16,9 @@ public class NoThrottle extends Throttle
   {
     // do nothing
   }
+
+  @Override
+  public long getTotalSleepTime() {
+    return 0;
+  }
 }

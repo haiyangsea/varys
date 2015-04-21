@@ -44,6 +44,8 @@ class NettyDataClient(
 
   override def updateRate(rate: Double): Unit = client.throttle.updateRate(rate)
 
+  override def sleepTime = client.throttle.getTotalSleepTime()
+
   override def close(): Unit = {
     client.close()
   }

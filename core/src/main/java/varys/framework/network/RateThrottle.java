@@ -10,7 +10,7 @@ import java.io.IOException;
  */
 public class RateThrottle extends Throttle
 {
-  private final Logger logger = LoggerFactory.getLogger(Throttle.class);
+  private final Logger logger = LoggerFactory.getLogger(RateThrottle.class);
 
   private long maxBytesPerSec;
   private long totalSleepTime;
@@ -54,6 +54,11 @@ public class RateThrottle extends Throttle
       logger.trace(this + " newMaxBitPerSec = " + newRate);
       mBPSLock.notifyAll();
     }
+  }
+
+  @Override
+  public long getTotalSleepTime() {
+    return this.totalSleepTime;
   }
 
   private long getBytesPerSec() {
